@@ -67,6 +67,10 @@ Rust Application Services
 | R17 | `.log-stream` 使用固定 `height: 360px`、`overflow-y: auto`、稳定滚动条空间和滚动边界；section heading 保持列表之外；空态在固定视口内展示 | `App.css`、`RequestLogPanel.tsx`（仅必要时增加语义属性） | GPT-5 Codex | 前端构建、源码约束、桌面宽度与窄视口布局检查 | 已确认 |
 | R18 | 删除前端 `SyncStrategy`、策略状态和选择器，Apifox 请求契约不再接收 strategy，Rust 预览与同步统一执行 Replace：删除旧 Apifox 来源规则后写入本次 Tag 结果，Custom/Imported 规则不变；从 `x-run-in-apifox` 解析并规范化 Web 接口页，持久化到带默认空值的规则字段，在线项目缺失直链时仅按数字 API ID + 项目 ID生成兜底；规则路径使用 Tauri opener 打开系统默认浏览器；`.rule-table-wrap` 固定 `420px`、纵向滚动、表头 sticky，Request/Target 单元格设置列宽及 `overflow-wrap: anywhere` | `model.rs`、`apifox.rs`、`commands.rs`、`types.ts`、`ApifoxSyncPanel.tsx`、`RuleTable.tsx`、`App.css`、使用文档和测试 | GPT-5 Codex | Replace 预览/同步测试、自定义规则保留、直链规范化/兜底/无效链接测试、前端构建、源码约束、桌面与窄视口人工检查 | 已确认 |
 | R19 | 复核现有 `delete_rule` 的共享 snapshot 更新和持久化链路，将操作列扩宽并为两个图标保留稳定尺寸；新增 `clear_rules(profileId)` 原子命令，清空 rules/syncedTags/兼容 activeTags 后持久化，运行中的 handler 因共享 snapshot 立即读取新状态；RuleTable 增加应用内重置确认框并通过统一 `apply` 显示 Toast；标题左侧组合 `h2 + search`，右侧仅保留全局开关、添加和重置，删除 kicker | `commands.rs`、`lib.rs`、`desktop.ts`、`App.tsx`、`RuleTable.tsx`、`App.css`、测试和使用文档 | GPT-5 Codex | 单条删除/全量清空持久化测试、运行态匹配回归、确认框/Toast 源码检查、前端构建和桌面布局检查 | 已确认 |
+| R20 | 接入 Ant Design 6 `ConfigProvider` 中文紧凑主题；以 `Button/Input/Select/Switch/Table/Form/Modal/Popconfirm/Tooltip/Alert/Empty/message` 替换手写基础组件；使用 `classnames` 管理状态类名并保留现有布局 CSS | `package.json`、`main.tsx`、`App.tsx`、全部工作台组件、`App.css` | GPT-5 Codex | 前端构建、源码约束、原生控件扫描、桌面与窄视口视觉检查 | 已确认 |
+| R21 | `ProxyHeader` 删除重复地址块；新增紧凑的配置操作条，使用 `Button` 展示 Apifox 连接摘要和 CA 信任摘要；`ApifoxSyncPanel` 与 `CertificatePanel` 改为受控 `Modal`，内部保留全部原有字段、验证、预览、同步及证书命令；`ConnectionGuide` 继续作为唯一代理地址与接入状态区；关闭弹框不清除 Profile 已保存字段，切换 Profile 时按现有逻辑重置为对应配置 | `App.tsx`、`ProxyHeader.tsx`、`ApifoxSyncPanel.tsx`、`CertificatePanel.tsx`、`ConnectionGuide.tsx`、`App.css` | GPT-5 Codex | 前端构建、源码约束、弹框开关/回显/操作源码检查、桌面与窄视口布局检查、Rust 回归 | 已确认 |
+| R22 | 统一规则区用户文案为“Mock 接口”；新增 `resolve_openapi_operation` 或等价 Tauri command，复用在线/本地 OpenAPI 获取与解析逻辑，按规范化 URL pathname、Method 执行精确优先和唯一模糊匹配并返回规则输入字段；新增接口 Drawer/Modal 以空值初始化，URL 第一项在 blur 时调用解析，唯一命中后回填，歧义/未命中使用 `message` 提示；编辑保持现有值回显 | `apifox.rs`、`commands.rs`、`lib.rs`、`model.rs`、`desktop.ts`、`types.ts`、`RuleTable.tsx`、测试 | GPT-5 Codex | 解析精确/模糊/歧义/未命中/Token 目标测试、前端构建、源码约束、表单初始化与回填交互检查、HTTP/HTTPS 回归 | 已确认 |
+| R23 | 将 `ApifoxSyncPanel` 的 Ant Design `Form` 调整为纵向单列，每个字段和验证操作独占一行并收窄弹框宽度；通过桌面 API 读取 Tauri 应用版本，Web 预览使用由 Vite 从 `package.json` 注入的构建期版本回退值，传入 `ProjectSidebar` 后在品牌标题右侧低权重展示；将 `App` 的接入区改为上下两行，第一行保留 `ConnectionGuide`，第二行单独排列 Apifox 与证书入口 | `vite.config.ts`、`desktop.ts`、`App.tsx`、`ProjectSidebar.tsx`、`ApifoxSyncPanel.tsx`、`App.css` | GPT-5 Codex | 前端构建、源码约束、版本来源扫描、桌面与窄视口布局检查、Rust 回归 | 已确认 |
 | R12 | 建立 Rust 单元/集成、前端测试和本地双 upstream E2E；更新 README/使用文档；构建并校验 arm64 app/dmg | tests、scripts、docs、Tauri bundle | GPT-5 Codex | `pnpm build`、`check:source`、`cargo test`、E2E、codesign、hdiutil | 已确认 |
 
 ## 数据模型设计
@@ -375,6 +379,14 @@ Content-Type: application/json
 | 2026-08-27 | 完成 R18：删除同步策略契约，固定 Replace；新增 Apifox Web 地址解析/持久化/系统浏览器跳转；规则表固定 420px、表头固定、请求和目标换行，操作列扩宽 | R4、R6、R18 | GPT-5 Codex | 同步交互收敛为单一路径，长 URL 不再撑宽列表，可从请求路径进入 Apifox 接口页；操作列不再裁切删除图标 |
 | 2026-08-27 | 用户通过 `ac` 确认 R19，开始实现规则重置命令和标题操作区 | R6、R19 | GPT-5 Codex | 重置范围固定为规则和 Tag，不改变连接、Token、Mock 前缀或全局开关 |
 | 2026-08-27 | 完成 R19：注册原子 `clear_rules` 命令和应用内确认框；搜索框移至标题旁，删除 `ROUTING RULES`，添加按钮右侧增加重置入口；操作列扩至 92px | R6、R12、R19 | GPT-5 Codex | 单条删除的两个操作图标完整可见；重置后运行态和持久化状态同时清空规则与 Tag；版本升级 0.1.6 |
+| 2026-08-27 | 完成 R20：基础控件全面迁移到 Ant Design 6，接入中文绿色主题和统一 `message` 反馈；Tag 改用多选 Select，规则改用 Table/Switch/Modal/Popconfirm，删除自制 Toast 与手写基础组件 CSS | R12、R20 | GPT-5 Codex | 保持工作台信息架构、固定滚动高度、长 URL 换行和既有业务流程；使用 `classnames`，未引入 TailwindCSS；版本升级 0.1.7 |
+| 2026-08-27 | 提议 R21：顶部删除重复代理地址，Apifox 连接与 HTTPS 证书改为低权重按钮和弹框，接入检查保留唯一地址 | R8、R9、R21 | GPT-5 Codex | 主视图减少低频配置占用，让 Mock 规则提前进入首屏；功能、命令和配置契约不变，等待确认 |
+| 2026-08-27 | 用户确认 R21；对照参考项目 `ApiFormDrawer`、`findApiInfoFromSwagger` 提议 R22：统一 Mock 接口命名，以 URL 第一项驱动 OpenAPI 唯一接口自动映射 | R6、R21、R22 | GPT-5 Codex | R21 开始实施；R22 涉及新增 OpenAPI 单接口解析契约，等待确认 |
+| 2026-08-27 | 完成 R21：删除顶部重复代理地址；Apifox 连接与 HTTPS 证书改为紧凑入口按钮和 Ant Design Modal；接入检查保留唯一地址；证书弹框明确 HTTPS Mock 用途并展示状态、指纹和路径 | R8、R9、R21 | GPT-5 Codex | 主页面配置区收敛为一行，Mock 规则提前进入首屏；Tauri 命令和配置契约不变 |
+| 2026-08-27 | 完成 R22：用户文案统一为 Mock 接口；新增/编辑使用参考项目同款右侧 Drawer；新增字段全空且 URL 第一项，失焦后调用 `resolve_apifox_operation`，唯一命中回填名称、路径、Method、匹配方式、Mock URL、Tag 和 Apifox 链接；完整 URL 保存时规范化 pathname | R6、R12、R22 | GPT-5 Codex | 多匹配/未匹配只提示且不覆盖；模板大括号兼容 URL 百分号编码；版本升级 0.1.8 |
+| 2026-08-27 | 提议 R23：Apifox 连接表单改为纵向单列；侧栏品牌标题旁展示桌面应用构建版本；Apifox 与证书入口移到接入检查下方独立一行 | R21、R23 | GPT-5 Codex | 仅调整前端布局和版本读取，不改变同步、证书或代理契约；等待确认 |
+| 2026-08-27 | 用户通过 `ac` 确认 R23，开始调整连接弹框、侧栏版本展示和接入区层级 | R23 | GPT-5 Codex | 版本以桌面 API 为准，Web 预览使用同一构建版本回退值 |
+| 2026-08-27 | 完成 R23：Apifox 连接弹框收窄为 720px，连接来源、Mock 前缀、两个 Token 和验证操作改为纵向单列；侧栏品牌标题右侧展示 Tauri 应用版本，Vite 从 `package.json` 注入预览回退版本；接入检查与 Apifox/HTTPS 证书入口拆分为上下两行 | R12、R21、R23 | GPT-5 Codex | 不改变连接、同步、证书和代理回调；Tag 验证区允许换行；版本升级 0.1.9 |
 
 ## 验证结果
 
@@ -394,4 +406,40 @@ Content-Type: application/json
 | 2026-08-27 | 0.1.3 本地安装包 | 通过 | arm64，包内版本 0.1.3；ad-hoc 签名通过 `codesign --verify --deep --strict`；DMG 通过 `hdiutil verify`；SHA-256 `ec223284932894b56a47bbb8de016b095aa018632ed0f7428a4d102a69f22aaf` |
 | 2026-08-27 | 0.1.5 本地安装包 | 通过 | arm64，包内版本 0.1.5；ad-hoc 签名通过 `codesign --verify --deep --strict`；DMG 通过 `hdiutil verify`；SHA-256 `6fd8db567ef767958490691f3926497a6843ac099d9c6874dfe090ee0cc62d59` |
 | 2026-08-27 | 0.1.6 本地安装包 | 通过 | arm64，包内版本 0.1.6；ad-hoc 签名通过 `codesign --verify --deep --strict`；DMG 通过 `hdiutil verify`；SHA-256 `79663b903ad5b7b9f9a713859bef5f70e0384fef1d8325e8e0c7589ca2b73999` |
+| 2026-08-27 | R20 Ant Design UI 迁移 | 通过（自动视觉检查受限） | `pnpm build`、`check:source`、原生基础控件与自制 Toast/Modal/Switch 源码扫描通过；Rust 23 项测试、`cargo check`、`cargo fmt --check` 通过；当前浏览器连接不可用，且系统存在同 bundle ID 的已安装版与构建版，未自动操作旧版窗口 |
+| 2026-08-27 | R21 低频配置弹框化 | 通过 | `pnpm build`、`pnpm run check:source`、`git diff --check` 通过；源码确认顶部重复地址和常驻配置面板已移除，Apifox/证书入口、弹框与既有操作回调完整保留 |
+| 2026-08-27 | R22 Mock 接口命名与 URL 自动映射 | 通过 | Rust 26 项测试全部通过，覆盖完整 URL、模板路径、精确/唯一模糊/歧义/未命中、Apifox 链接保存和 HTTP/HTTPS E2E；`pnpm build`、`check:source`、`cargo check`、`cargo fmt --check`、`git diff --check` 通过 |
+| 2026-08-27 | 0.1.8 本地安装包 | 通过 | arm64，包内短版本与构建版本均为 0.1.8；ad-hoc 签名通过 `codesign --verify --deep --strict`；DMG 通过 `hdiutil verify`；SHA-256 `785abd938df0c221f7ea1b466bd5cf203d5c32f5345a0e45b7ee9e6fb9bf9896`；macOS 未授予 Computer Use 权限，未执行自动截图和桌面点击验收 |
+| 2026-08-27 | 0.1.7 本地安装包 | 通过 | arm64，包内短版本与构建版本均为 0.1.7；ad-hoc 签名通过 `codesign --verify --deep --strict`；DMG 通过 `hdiutil verify`；SHA-256 `bad3ffb9ff5437fcb1061c26e74ed7c3bfcc79fca2a9742cd1598ec4cdbfd3fd` |
+| 2026-08-27 | R23 连接配置布局与应用版本展示 | 通过（自动视觉检查受限） | `pnpm build`、`pnpm run check:source`、`cargo check`、`cargo fmt --check`、`git diff --check` 通过；Rust 26 项测试全部通过，包含 HTTP/HTTPS E2E；源码确认表单单列、配置入口分行、版本来自 Tauri API 和构建注入；本地预览运行于 `http://127.0.0.1:1420/`，当前无可用浏览器连接，未执行自动截图与点击验收 |
+| 2026-08-27 | 0.1.9 本地安装包 | 通过 | arm64，DMG 内 `.app` 短版本与构建版本均为 0.1.9；ad-hoc 签名通过 `codesign --verify --deep --strict`；DMG 通过 `hdiutil verify`；SHA-256 `fae70368fa1c9576edccb721f32c6773c5b62eef438b0af7907919e5896358f5` |
+| 2026-08-27 | 0.1.9 用户安装验收 | 通过 | 用户确认验证通过并要求提交当前实现 |
 | 2026-08-27 | 微信开发者工具真实项目人工验收 | 待用户执行 | 需要用户的真实源域名、Apifox 项目、Token 和微信开发者工具环境；按 `main-使用与验收文档.md` 验收 |
+# R20 Ant Design UI 迁移方案
+
+## 目标与边界
+
+- 使用 Ant Design 6 统一基础交互组件，保留现有页面信息架构、绿色品牌色、紧凑桌面布局和业务流程。
+- 使用 `ConfigProvider` 集中设置中文 locale、主色、圆角、控件尺寸和字体；Lucide 图标继续作为按钮图标使用。
+- 使用 `classnames` 组合业务状态类名。TailwindCSS 已获准使用，但本轮不引入，避免迁移期间并存两套新的样式约束；现有布局 CSS 继续负责工作台网格、固定高度和业务内容换行。
+- 不修改 Tauri command、Rust 代理、配置结构、Apifox 同步协议和请求转发语义。
+
+## 组件映射
+
+| 现有实现 | Ant Design 实现 | 保持项 |
+| --- | --- | --- |
+| 原生按钮与图标按钮 | `Button`、`Tooltip` | 命令层级、图标、禁用与 loading 状态 |
+| 原生输入框、数字框、下拉框 | `Input`、`InputNumber`、`Select`、`Segmented` | 字段文案、回显、校验和 Tag 选择流程 |
+| 手写开关 | `Switch` | 全局 Mock 与单接口启停语义 |
+| 原生表格 | `Table` | 420px 规则视口、固定列宽、长 URL 换行和操作列 |
+| 手写遮罩弹窗与确认框 | `Modal`、`Popconfirm` | 创建/编辑/删除/重置的确认流程 |
+| 自制 Toast | `App.useApp()` / `message` | 所有成功和失败反馈，错误内容脱敏 |
+| 手写空状态与状态标签 | `Empty`、`Alert`、`Badge`、`Tag` | 紧凑信息展示和原有状态语义 |
+
+## 实施与验证
+
+1. 在应用入口接入 `ConfigProvider` 与 `App` 上下文，定义紧凑绿色主题。
+2. 依次迁移全局反馈、侧栏与运行控制、Apifox 同步、规则管理、请求日志、证书与诊断模块。
+3. 清理被替代的手写基础控件、Modal、Switch、Table 和 Toast CSS，仅保留布局与业务展示样式。
+4. 每个增量执行 TypeScript/Vite 构建和源码规范检查；完成后验证桌面与窄窗口布局、下拉层、弹窗、固定滚动区和长 URL 换行。
+5. 全量验证前端构建、Rust 单测/检查、Tauri 安装包构建及 DMG 完整性。

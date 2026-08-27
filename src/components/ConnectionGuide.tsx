@@ -1,3 +1,4 @@
+import { Button, Tooltip } from "antd";
 import { CheckCircle2, Circle, Copy } from "lucide-react";
 import type { CertificateStatus, ProjectProfile, ProxyStatus } from "../types";
 
@@ -16,7 +17,7 @@ export function ConnectionGuide(props: ConnectionGuideProps) {
       <GuideCheck ready={props.certificate.trusted} text="CA 已导入并设为始终信任" />
       <GuideCheck ready={props.proxyStatus === "running"} text="本地代理端口正在监听" />
       <GuideCheck ready={props.hasTraffic} text="已收到微信开发者工具流量" />
-      <div className="guide-endpoint"><span>在微信开发者工具代理设置中填写</span><code>{endpoint}</code><button className="copy-button" onClick={() => navigator.clipboard.writeText(endpoint)} title="复制" type="button"><Copy size={14} /></button></div>
+      <div className="guide-endpoint"><span>在微信开发者工具代理设置中填写</span><code>{endpoint}</code><Tooltip title="复制"><Button aria-label="复制代理地址" className="copy-button" icon={<Copy size={14} />} onClick={() => navigator.clipboard.writeText(endpoint)} type="text" /></Tooltip></div>
     </section>
   );
 }

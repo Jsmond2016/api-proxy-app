@@ -1,3 +1,4 @@
+import { Button, Empty, Input, Select, Tooltip } from "antd";
 import { Activity, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { RequestLog } from "../types";
@@ -18,9 +19,9 @@ export function RequestLogPanel({ logs, onClear }: RequestLogPanelProps) {
   return (
     <section className="request-log-section">
       <div className="section-heading"><div><div className="section-kicker">LIVE TRAFFIC</div><h2>请求记录</h2></div><div className="log-tools">
-        <label className="search-field"><Search size={15} /><input placeholder="搜索请求" value={keyword} onChange={(event) => setKeyword(event.target.value)} /></label>
-        <select aria-label="状态筛选" value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">全部状态</option><option value="matched">已 Mock</option><option value="passed">透传</option><option value="failed">失败</option></select>
-        <button className="icon-button" onClick={onClear} title="清空请求记录" type="button"><X size={16} /></button>
+        <Input className="search-field" placeholder="搜索请求" prefix={<Search size={15} />} value={keyword} onChange={(event) => setKeyword(event.target.value)} />
+        <Select aria-label="状态筛选" value={status} onChange={setStatus} options={[{ value: "all", label: "全部状态" }, { value: "matched", label: "已 Mock" }, { value: "passed", label: "透传" }, { value: "failed", label: "失败" }]} />
+        <Tooltip title="清空请求记录"><Button aria-label="清空请求记录" className="icon-button" icon={<X size={16} />} onClick={onClear} type="text" /></Tooltip>
       </div></div>
       <div className="log-stream">{visible.map((log) => <LogRow key={log.id} log={log} />)}<EmptyLogs count={visible.length} /></div>
     </section>
@@ -37,4 +38,4 @@ function ruleName(log: RequestLog) { if (log.ruleName) return log.ruleName; retu
 function responseCode(log: RequestLog) { if (log.responseCode !== null) return String(log.responseCode); return "--"; }
 function statusClass(status: RequestLog["status"]) { return `log-status log-status-${status}`; }
 function statusLabel(status: RequestLog["status"]) { if (status === "matched") return "已 Mock"; if (status === "failed") return "失败"; return "透传"; }
-function EmptyLogs({ count }: { count: number }) { if (count > 0) return null; return <div className="empty-rules">暂无请求。启动代理并在微信开发者工具中配置代理后，这里会实时更新。</div>; }
+function EmptyLogs({ count }: { count: number }) { if (count > 0) return null; return <Empty className="empty-rules" description="暂无请求。启动代理并在微信开发者工具中配置代理后，这里会实时更新。" image={Empty.PRESENTED_IMAGE_SIMPLE} />; }

@@ -108,18 +108,32 @@ export interface InterfacePreview {
   tags: string[];
 }
 
+export interface ResolveOperationInput {
+  profileId: string;
+  url: string;
+  method: string;
+}
+
+export interface OperationResolution {
+  matchCount: number;
+  interface: ResolvedInterface | null;
+}
+
+export interface ResolvedInterface {
+  name: string;
+  method: string;
+  path: string;
+  matchMode: MatchMode;
+  target: string;
+  tags: string[];
+  apifoxWebUrl: string;
+}
+
 export interface DiagnosticEntry {
   id: string;
   createdAt: string;
   level: "info" | "success" | "error";
   action: string;
-  message: string;
-}
-
-export interface ToastMessage {
-  id: string;
-  level: "success" | "error";
-  title: string;
   message: string;
 }
 
@@ -134,4 +148,5 @@ export interface RuleInput {
   enabled: boolean;
   tags: string[];
   priority: number;
+  apifoxWebUrl: string;
 }

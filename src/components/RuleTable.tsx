@@ -1,13 +1,16 @@
-import { Pencil, Plus, RotateCcw, Search, Trash2, X } from "lucide-react";
+import { App as AntApp, Button, Drawer, Empty, Form, Input, InputNumber, Popconfirm, Select, Space, Spin, Switch, Table, Tooltip } from "antd";
+import type { TableColumnsType } from "antd";
+import { Pencil, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { FormEvent, MouseEvent } from "react";
-import type { MatchMode, ProjectProfile, ProxyRule, RuleInput } from "../types";
+import type { MouseEvent } from "react";
+import type { MatchMode, OperationResolution, ProjectProfile, ProxyRule, ResolveOperationInput, RuleInput } from "../types";
 
 interface RuleTableProps {
   profile: ProjectProfile;
   onDelete: (ruleId: string) => Promise<void>;
   onOpenUrl: (url: string) => Promise<void>;
   onReset: () => Promise<void>;
+  onResolve: (input: ResolveOperationInput) => Promise<OperationResolution>;
   onSave: (input: RuleInput) => Promise<void>;
   onToggle: (ruleId: string, enabled: boolean) => Promise<void>;
   onToggleGlobal: (enabled: boolean) => Promise<void>;
@@ -17,10 +20,6 @@ export function RuleTable(props: RuleTableProps) {
   const [keyword, setKeyword] = useState("");
   const [editing, setEditing] = useState<ProxyRule | null>(null);
   const [creating, setCreating] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<ProxyRule | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [resetOpen, setResetOpen] = useState(false);
-  const [resetting, setResetting] = useState(false);
   const [togglingGlobal, setTogglingGlobal] = useState(false);
   const visible = useMemo(() => {
     const query = keyword.trim().toLowerCase();
@@ -28,97 +27,46 @@ export function RuleTable(props: RuleTableProps) {
     return props.profile.rules.filter((rule) => `${rule.name} ${rule.method} ${rule.path} ${rule.tags.join(" ")}`.toLowerCase().includes(query));
   }, [keyword, props.profile.rules]);
 
-  async function toggleGlobal() {
+  async function toggleGlobal(enabled: boolean) {
     setTogglingGlobal(true);
     try {
-      await props.onToggleGlobal(!props.profile.globalMockEnabled);
+      await props.onToggleGlobal(enabled);
     } finally {
       setTogglingGlobal(false);
     }
   }
 
-  function remove(rule: ProxyRule) {
-    setDeleteTarget(rule);
-  }
-
-  async function confirmDelete() {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    try {
-      await props.onDelete(deleteTarget.id);
-      setDeleteTarget(null);
-    } finally {
-      setDeleting(false);
-    }
-  }
-
-  async function confirmReset() {
-    setResetting(true);
-    try {
-      await props.onReset();
-      setKeyword("");
-      setResetOpen(false);
-    } finally {
-      setResetting(false);
-    }
-  }
+  const columns = useMemo<TableColumnsType<ProxyRule>>(() => [
+    { title: "Mock 开关", dataIndex: "enabled", width: 96, render: (_, rule) => <Switch aria-label={`切换${rule.name}`} checked={rule.enabled} onChange={(enabled) => props.onToggle(rule.id, enabled)} size="small" /> },
+    { title: "接口信息", dataIndex: "name", width: 180, render: (_, rule) => <div className="rule-name-cell"><strong>{rule.name}</strong><span>{ruleMeta(rule)}</span></div> },
+    { title: "请求", dataIndex: "path", width: 260, render: (_, rule) => <div className="request-cell"><span className={`method-badge method-${rule.method.toLowerCase()}`}>{rule.method}</span><RulePath rule={rule} onOpenUrl={props.onOpenUrl} /></div> },
+    { title: "匹配", dataIndex: "matchMode", width: 130, render: (_, rule) => <span className="match-mode">{rule.matchMode} · P{rule.priority}</span> },
+    { title: "Mock 目标", dataIndex: "target", width: 320, render: (target: string) => <div className="target-cell"><span title={target}>{target}</span></div> },
+    { title: "操作", key: "actions", fixed: "right", width: 96, render: (_, rule) => <RuleActions onDelete={props.onDelete} onEdit={setEditing} rule={rule} /> },
+  ], [props.onDelete, props.onOpenUrl, props.onToggle]);
 
   return (
     <section className="rules-section">
       <div className="section-heading">
-        <div className="rules-heading-primary"><h2>Mock 规则</h2><label className="search-field"><Search size={16} /><input placeholder="搜索名称、路径或 Tag" value={keyword} onChange={(event) => setKeyword(event.target.value)} /></label></div>
+        <div className="rules-heading-primary"><h2>Mock 接口</h2><Input allowClear className="search-field" placeholder="搜索接口名称、URL 或 Tag" prefix={<Search size={16} />} value={keyword} onChange={(event) => setKeyword(event.target.value)} /></div>
         <div className="rules-tools">
-          <div className="global-mock-control"><span>全局 Mock</span><button aria-checked={props.profile.globalMockEnabled} aria-label="全局 Mock 开关" className={switchClass(props.profile.globalMockEnabled)} disabled={togglingGlobal} onClick={toggleGlobal} role="switch" title="全局 Mock 开关" type="button"><span /></button></div>
-          <button className="command-button" onClick={() => setCreating(true)} type="button"><Plus size={16} />添加规则</button>
-          <button className="outline-button" disabled={props.profile.rules.length === 0} onClick={() => setResetOpen(true)} type="button"><RotateCcw size={16} />重置列表</button>
+          <div className="global-mock-control"><span>全局 Mock</span><Switch aria-label="全局 Mock 开关" checked={props.profile.globalMockEnabled} loading={togglingGlobal} onChange={toggleGlobal} /></div>
+          <Button className="command-button" icon={<Plus size={16} />} onClick={() => setCreating(true)} type="primary">添加接口</Button>
+          <Popconfirm cancelText="取消" description="将清空全部 Mock 接口及已同步 Tag，项目连接、Token 和全局开关保持不变。" disabled={props.profile.rules.length === 0} okButtonProps={{ danger: true }} okText="确认重置" onConfirm={async () => { await props.onReset(); setKeyword(""); }} title="重置 Mock 接口列表？">
+            <Button className="outline-button" disabled={props.profile.rules.length === 0} icon={<RotateCcw size={16} />}>重置接口</Button>
+          </Popconfirm>
         </div>
       </div>
       <div className="rule-table-wrap">
-        <table className="rule-table">
-          <thead><tr><th>接口 Mock</th><th>接口</th><th>请求</th><th>匹配</th><th>Mock 目标</th><th>操作</th></tr></thead>
-          <tbody>{visible.map((rule) => <RuleRow key={rule.id} rule={rule} onDelete={remove} onEdit={setEditing} onOpenUrl={props.onOpenUrl} onToggle={props.onToggle} />)}</tbody>
-        </table>
-        <EmptyRules count={visible.length} />
+        <Table<ProxyRule> columns={columns} dataSource={visible} locale={{ emptyText: <Empty description="尚无 Mock 接口。先同步 Apifox Tag，或手动添加接口。" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }} pagination={false} rowKey="id" scroll={{ x: 1082, y: 360 }} size="small" />
       </div>
-      <RuleDialog
-        key={editing?.id || String(creating)}
-        profile={props.profile}
-        rule={editing}
-        visible={creating || Boolean(editing)}
-        onClose={() => { setCreating(false); setEditing(null); }}
-        onSave={props.onSave}
-      />
-      <DeleteRuleDialog busy={deleting} rule={deleteTarget} onCancel={() => setDeleteTarget(null)} onConfirm={confirmDelete} />
-      <ResetRulesDialog busy={resetting} open={resetOpen} onCancel={() => setResetOpen(false)} onConfirm={confirmReset} />
+      <RuleDialog key={editing?.id || String(creating)} profile={props.profile} rule={editing} visible={creating || Boolean(editing)} onClose={() => { setCreating(false); setEditing(null); }} onResolve={props.onResolve} onSave={props.onSave} />
     </section>
   );
 }
 
-function ResetRulesDialog(props: { busy: boolean; open: boolean; onCancel: () => void; onConfirm: () => Promise<void> }) {
-  if (!props.open) return null;
-  return (
-    <div className="modal-backdrop" role="presentation"><section aria-modal="true" className="modal-panel confirm-panel" role="dialog"><div className="modal-head"><h2>重置规则列表</h2><button className="icon-button" disabled={props.busy} onClick={props.onCancel} type="button"><X size={17} /></button></div><p>将清空当前项目的全部 Mock 规则及已同步 Tag。项目连接、Token、Mock 前缀和全局开关不会改变。</p><div className="modal-actions"><button className="outline-button" disabled={props.busy} onClick={props.onCancel} type="button">取消</button><button className="danger-button" disabled={props.busy} onClick={props.onConfirm} type="button">确认重置</button></div></section></div>
-  );
-}
-
-function DeleteRuleDialog(props: { busy: boolean; rule: ProxyRule | null; onCancel: () => void; onConfirm: () => Promise<void> }) {
-  if (!props.rule) return null;
-  return (
-    <div className="modal-backdrop" role="presentation"><section aria-modal="true" className="modal-panel confirm-panel" role="dialog"><div className="modal-head"><h2>删除规则</h2><button className="icon-button" onClick={props.onCancel} type="button"><X size={17} /></button></div><p>确定删除“{props.rule.name}”吗？如果它来自 Apifox，后续再次同步相同 Tag 时可以重新生成。</p><div className="modal-actions"><button className="outline-button" disabled={props.busy} onClick={props.onCancel} type="button">取消</button><button className="danger-button" disabled={props.busy} onClick={props.onConfirm} type="button">确认删除</button></div></section></div>
-  );
-}
-
-function RuleRow(props: { rule: ProxyRule; onDelete: (rule: ProxyRule) => void; onEdit: (rule: ProxyRule) => void; onOpenUrl: (url: string) => Promise<void>; onToggle: (id: string, enabled: boolean) => Promise<void> }) {
-  return (
-    <tr>
-      <td><button aria-label={`切换${props.rule.name}`} className={switchClass(props.rule.enabled)} onClick={() => props.onToggle(props.rule.id, !props.rule.enabled)} type="button"><span /></button></td>
-      <td><div className="rule-name-cell"><strong>{props.rule.name}</strong><span>{ruleMeta(props.rule)}</span></div></td>
-      <td><div className="request-cell"><span className={`method-badge method-${props.rule.method.toLowerCase()}`}>{props.rule.method}</span><RulePath rule={props.rule} onOpenUrl={props.onOpenUrl} /></div></td>
-      <td><span className="match-mode">{props.rule.matchMode} · P{props.rule.priority}</span></td>
-      <td><div className="target-cell"><span title={props.rule.target}>{props.rule.target}</span></div></td>
-      <td><div className="row-actions"><button className="row-action" onClick={() => props.onEdit(props.rule)} title="编辑规则" type="button"><Pencil size={15} /></button><button className="row-action" onClick={() => props.onDelete(props.rule)} title="删除规则" type="button"><Trash2 size={15} /></button></div></td>
-    </tr>
-  );
+function RuleActions(props: { rule: ProxyRule; onDelete: (ruleId: string) => Promise<void>; onEdit: (rule: ProxyRule) => void }) {
+  return <div className="row-actions"><Tooltip title="编辑接口"><Button aria-label="编辑接口" className="row-action" icon={<Pencil size={15} />} onClick={() => props.onEdit(props.rule)} type="text" /></Tooltip><Popconfirm cancelText="取消" description="Apifox 接口可在后续同步相同 Tag 时重新生成。" okButtonProps={{ danger: true }} okText="确认删除" onConfirm={() => props.onDelete(props.rule.id)} title={`删除“${props.rule.name}”？`}><Tooltip title="删除接口"><Button aria-label="删除接口" className="row-action" danger icon={<Trash2 size={15} />} type="text" /></Tooltip></Popconfirm></div>;
 }
 
 function RulePath(props: { rule: ProxyRule; onOpenUrl: (url: string) => Promise<void> }) {
@@ -130,30 +78,50 @@ function RulePath(props: { rule: ProxyRule; onOpenUrl: (url: string) => Promise<
   return <a className="rule-path-link" href={props.rule.apifoxWebUrl} onClick={open} title="在 Apifox Web 打开接口"><code>{props.rule.path}</code></a>;
 }
 
-function RuleDialog(props: { visible: boolean; profile: ProjectProfile; rule: ProxyRule | null; onClose: () => void; onSave: (input: RuleInput) => Promise<void> }) {
+function RuleDialog(props: { visible: boolean; profile: ProjectProfile; rule: ProxyRule | null; onClose: () => void; onResolve: (input: ResolveOperationInput) => Promise<OperationResolution>; onSave: (input: RuleInput) => Promise<void> }) {
+  const { message } = AntApp.useApp();
   const [name, setName] = useState(props.rule?.name || "");
-  const [method, setMethod] = useState(props.rule?.method || "GET");
+  const [method, setMethod] = useState(props.rule?.method || "");
   const [path, setPath] = useState(props.rule?.path || "");
-  const [matchMode, setMatchMode] = useState<MatchMode>(props.rule?.matchMode || "exact");
+  const [matchMode, setMatchMode] = useState<MatchMode | "">(props.rule?.matchMode || "");
   const [target, setTarget] = useState(props.rule?.target || "");
   const [tags, setTags] = useState(props.rule?.tags.join(", ") || "");
-  const [priority, setPriority] = useState(String(props.rule?.priority || 100));
+  const [priority, setPriority] = useState<number | null>(props.rule?.priority ?? null);
+  const [apifoxWebUrl, setApifoxWebUrl] = useState(props.rule?.apifoxWebUrl || "");
   const [busy, setBusy] = useState(false);
-  if (!props.visible) return null;
+  const [resolving, setResolving] = useState(false);
+  const saveDisabled = !name.trim() || !path.trim() || !target.trim() || !method || !matchMode;
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    const input: RuleInput = {
-      profileId: props.profile.id,
-      name,
-      method,
-      path,
-      matchMode,
-      target,
-      enabled: true,
-      tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
-      priority: Number(priority),
-    };
+  async function resolveUrl() {
+    if (!path.trim()) return;
+    setResolving(true);
+    try {
+      const result = await props.onResolve({ profileId: props.profile.id, url: path, method });
+      if (!result.interface) {
+        if (result.matchCount > 1) void message.warning(`匹配到 ${result.matchCount} 个接口，请输入更完整的 URL`);
+        if (result.matchCount === 0) void message.warning("未找到匹配的接口，请检查 URL 或手动填写其他字段");
+        return;
+      }
+      const resolved = result.interface;
+      setPath(resolved.path);
+      setName(resolved.name);
+      setMethod(resolved.method);
+      setMatchMode(resolved.matchMode);
+      setTarget(resolved.target);
+      setTags(resolved.tags.join(", "));
+      setPriority(100);
+      setApifoxWebUrl(resolved.apifoxWebUrl);
+      void message.success("已从 Apifox 自动填充接口信息");
+    } catch (reason) {
+      void message.error(errorMessage(reason));
+    } finally {
+      setResolving(false);
+    }
+  }
+
+  async function submit() {
+    if (!matchMode) return;
+    const input: RuleInput = { profileId: props.profile.id, name, method, path: normalizeRulePath(path), matchMode, target, enabled: true, tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean), priority: priority ?? 100, apifoxWebUrl };
     if (props.rule) {
       input.id = props.rule.id;
       input.enabled = props.rule.enabled;
@@ -168,18 +136,21 @@ function RuleDialog(props: { visible: boolean; profile: ProjectProfile; rule: Pr
   }
 
   return (
-    <div className="modal-backdrop" role="presentation"><form className="modal-panel modal-panel-wide" onSubmit={submit}>
-      <div className="modal-head"><h2>{ruleDialogTitle(props.rule)}</h2><button className="icon-button" onClick={props.onClose} type="button"><X size={17} /></button></div>
-      <div className="form-grid"><label>规则名称<input required value={name} onChange={(event) => setName(event.target.value)} /></label><label>Method<select value={method} onChange={(event) => setMethod(event.target.value)}>{["GET", "POST", "PUT", "PATCH", "DELETE"].map((item) => <option key={item}>{item}</option>)}</select></label></div>
-      <div className="form-grid"><label>请求路径<input placeholder="/api/orders/{id}" required value={path} onChange={(event) => setPath(event.target.value)} /></label><label>匹配模式<select value={matchMode} onChange={(event) => setMatchMode(event.target.value as MatchMode)}><option value="exact">exact</option><option value="template">template</option><option value="contains">contains</option><option value="regex">regex</option></select></label></div>
-      <label>完整 Mock 目标 URL<input placeholder="https://mock.example.com/api/orders/{id}" required value={target} onChange={(event) => setTarget(event.target.value)} /></label>
-      <div className="form-grid"><label>Tags（逗号分隔）<input value={tags} onChange={(event) => setTags(event.target.value)} /></label><label>优先级<input type="number" value={priority} onChange={(event) => setPriority(event.target.value)} /></label></div>
-      <div className="modal-actions"><button className="outline-button" onClick={props.onClose} type="button">取消</button><button className="command-button" disabled={busy} type="submit">保存规则</button></div>
-    </form></div>
+    <Drawer destroyOnHidden extra={<Space><Button disabled={busy} onClick={props.onClose}>取消</Button><Button disabled={saveDisabled} loading={busy} onClick={submit} type="primary">{saveButtonLabel(props.rule)}</Button></Space>} onClose={props.onClose} open={props.visible} title={ruleDialogTitle(props.rule)} width={600}>
+      <Form layout="vertical" requiredMark={false}>
+        <Form.Item extra="输入完整 URL 或接口路径，失焦后将从当前 Apifox 项目自动匹配" label="接口 URL" required><Input placeholder="https://api.example.com/api/orders/{id}" suffix={resolvingIndicator(resolving)} value={path} onBlur={resolveUrl} onChange={(event) => setPath(event.target.value)} /></Form.Item>
+        <Form.Item label="接口名称" required><Input placeholder="请输入接口名称" value={name} onChange={(event) => setName(event.target.value)} /></Form.Item>
+        <Form.Item label="Mock URL" required><Input placeholder="https://mock.example.com/api/orders/{id}" value={target} onChange={(event) => setTarget(event.target.value)} /></Form.Item>
+        <div className="form-grid"><Form.Item label="请求方式" required><Select placeholder="请选择" value={method || undefined} onChange={setMethod} options={["GET", "POST", "PUT", "PATCH", "DELETE"].map((item) => ({ label: item, value: item }))} /></Form.Item><Form.Item label="匹配方式" required><Select placeholder="请选择" value={matchMode || undefined} onChange={setMatchMode} options={["exact", "template", "contains", "regex"].map((item) => ({ label: item, value: item }))} /></Form.Item></div>
+        <div className="form-grid"><Form.Item label="Tags（逗号分隔）"><Input placeholder="选填" value={tags} onChange={(event) => setTags(event.target.value)} /></Form.Item><Form.Item label="优先级"><InputNumber min={0} placeholder="选填" value={priority} onChange={setPriority} /></Form.Item></div>
+      </Form>
+    </Drawer>
   );
 }
 
-function switchClass(enabled: boolean) { if (enabled) return "rule-switch rule-switch-on"; return "rule-switch"; }
 function ruleMeta(rule: ProxyRule) { const tags = rule.tags.join(", "); if (tags) return `${rule.source} · ${tags}`; return rule.source; }
-function ruleDialogTitle(rule: ProxyRule | null) { if (rule) return "编辑规则"; return "添加自定义规则"; }
-function EmptyRules({ count }: { count: number }) { if (count > 0) return null; return <div className="empty-rules">尚无规则。先同步 Apifox Tag，或添加自定义规则。</div>; }
+function ruleDialogTitle(rule: ProxyRule | null) { if (rule) return "编辑 Mock 接口"; return "添加 Mock 接口"; }
+function saveButtonLabel(rule: ProxyRule | null) { if (rule) return "更新"; return "添加"; }
+function resolvingIndicator(resolving: boolean) { if (resolving) return <Spin size="small" />; return null; }
+function normalizeRulePath(value: string) { try { return new URL(value).pathname; } catch { const path = value.split(/[?#]/)[0].trim(); if (path.startsWith("/")) return path; return `/${path}`; } }
+function errorMessage(reason: unknown) { if (reason instanceof Error) return reason.message; return String(reason); }

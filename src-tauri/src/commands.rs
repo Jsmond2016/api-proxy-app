@@ -4,10 +4,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use tauri::{AppHandle, State};
 
-use crate::apifox::{apply_mock_token, build_rules, fetch_document, parse_document, replace_rules};
+use crate::apifox::{
+    apply_mock_token, build_rules, fetch_document, find_operation, parse_document, replace_rules,
+};
 use crate::model::{
     ApifoxConnection, ApifoxMode, ApifoxPreview, ApifoxRequest, DesktopSnapshot, InterfacePreview,
-    MatchMode, ProfileInput, ProjectProfile, ProxyRule, ProxyStatus, RuleInput, RuleSource,
+    MatchMode, OperationResolution, ProfileInput, ProjectProfile, ProxyRule, ProxyStatus,
+    ResolveOperationInput, ResolvedInterface, RuleInput, RuleSource,
 };
 use crate::proxy;
 use crate::state::AppState;
@@ -212,6 +215,54 @@ pub async fn sync_apifox(
 }
 
 #[tauri::command]
+pub async fn resolve_apifox_operation(
+    input: ResolveOperationInput,
+    state: State<'_, AppState>,
+) -> Result<OperationResolution, String> {
+    let connection = apifox_connection(&state, &input.profile_id)?;
+    let mut request = ApifoxRequest {
+        profile_id: input.profile_id,
+        mode: connection.mode,
+        project_id: connection.project_id,
+        local_openapi_url: connection.local_openapi_url,
+        mock_prefix: connection.mock_prefix,
+        access_token: Some(connection.access_token),
+        mock_token: Some(connection.mock_token.clone()),
+        selected_tags: Vec::new(),
+    };
+    apply_default_mock_prefix(&mut request);
+    let content = fetch_document(&request, request.access_token.as_deref()).await?;
+    let document = parse_document(&content)?;
+    let matched = find_operation(&document.operations, &input.url, &input.method);
+    let Some(operation) = matched.operation else {
+        return Ok(OperationResolution {
+            match_count: matched.match_count,
+            interface: None,
+        });
+    };
+    let mut rules = build_rules(&[operation], &[], &request.mock_prefix, &request.project_id)?;
+    apply_mock_token(
+        &mut rules,
+        request.mock_token.as_deref().unwrap_or_default(),
+    )?;
+    let rule = rules
+        .pop()
+        .ok_or_else(|| "Matched interface could not be mapped".to_string())?;
+    Ok(OperationResolution {
+        match_count: 1,
+        interface: Some(ResolvedInterface {
+            name: rule.name,
+            method: rule.method,
+            path: rule.path,
+            match_mode: rule.match_mode,
+            target: rule.target,
+            tags: rule.tags,
+            apifox_web_url: rule.apifox_web_url,
+        }),
+    })
+}
+
+#[tauri::command]
 pub fn save_rule(input: RuleInput, state: State<'_, AppState>) -> Result<DesktopSnapshot, String> {
     let mut rule = build_custom_rule(&input)?;
     let mut current = lock_snapshot(&state)?;
@@ -223,7 +274,9 @@ pub fn save_rule(input: RuleInput, state: State<'_, AppState>) -> Result<Desktop
     if let Some(existing) = profile.rules.iter_mut().find(|item| item.id == rule.id) {
         rule.source = existing.source;
         rule.source_operation_id = existing.source_operation_id.clone();
-        rule.apifox_web_url = existing.apifox_web_url.clone();
+        if rule.apifox_web_url.is_empty() {
+            rule.apifox_web_url = existing.apifox_web_url.clone();
+        }
         *existing = rule;
     } else {
         profile.rules.push(rule);
@@ -426,18 +479,18 @@ fn build_custom_rule(input: &RuleInput) -> Result<ProxyRule, String> {
     let method = input.method.trim().to_uppercase();
     let path = input.path.trim();
     if name.is_empty() || method.is_empty() || path.is_empty() {
-        return Err("Rule name, method and path are required".to_string());
+        return Err("Mock interface name, method and URL are required".to_string());
     }
     if !path.starts_with('/') && input.match_mode != MatchMode::Regex {
-        return Err("Rule path must start with /".to_string());
+        return Err("Mock interface URL must start with /".to_string());
     }
     url::Url::parse(input.target.trim())
-        .map_err(|error| format!("Rule target is invalid: {error}"))?;
+        .map_err(|error| format!("Mock URL is invalid: {error}"))?;
     Ok(ProxyRule {
         id: input.id.clone().unwrap_or_else(|| create_id("rule")),
         source: RuleSource::Custom,
         source_operation_id: String::new(),
-        apifox_web_url: String::new(),
+        apifox_web_url: input.apifox_web_url.trim().to_string(),
         name: name.to_string(),
         method,
         path: path.to_string(),
@@ -591,8 +644,10 @@ fn create_id(prefix: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_profile, normalize_host, reset_profile_rules, resolve_token};
-    use crate::model::{MatchMode, ProfileInput, ProxyRule, RuleSource};
+    use super::{
+        build_custom_rule, build_profile, normalize_host, reset_profile_rules, resolve_token,
+    };
+    use crate::model::{MatchMode, ProfileInput, ProxyRule, RuleInput, RuleSource};
 
     #[test]
     fn normalizes_source_hosts() {
@@ -634,6 +689,30 @@ mod tests {
             resolve_token(Some("   "), "stored-token").as_deref(),
             Some("stored-token")
         );
+    }
+
+    #[test]
+    fn mapped_custom_interface_preserves_apifox_web_url() {
+        let rule = build_custom_rule(&RuleInput {
+            id: None,
+            profile_id: "profile".to_string(),
+            name: "订单详情".to_string(),
+            method: "GET".to_string(),
+            path: "/orders/{id}".to_string(),
+            match_mode: MatchMode::Template,
+            target: "https://mock.example.test/orders/{id}".to_string(),
+            enabled: true,
+            tags: vec!["订单".to_string()],
+            priority: 100,
+            apifox_web_url: "https://app.apifox.com/project/123/apis/api-456".to_string(),
+        })
+        .expect("mapped interface should build");
+
+        assert_eq!(
+            rule.apifox_web_url,
+            "https://app.apifox.com/project/123/apis/api-456"
+        );
+        assert_eq!(rule.source, RuleSource::Custom);
     }
 
     #[test]

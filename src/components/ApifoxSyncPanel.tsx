@@ -1,5 +1,6 @@
-import { Check, ChevronDown, CloudDownload, KeyRound, Link2, Search, Tags } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Alert, Button, Form, Input, List, Modal, Segmented, Select } from "antd";
+import { CloudDownload, KeyRound, Link2, RefreshCw } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { ApifoxPreview, ApifoxRequest, ProjectProfile } from "../types";
 
 interface ApifoxSyncPanelProps {
@@ -20,6 +21,7 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
   const [validated, setValidated] = useState(false);
   const [preview, setPreview] = useState<ApifoxPreview | null>(null);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     setMode(props.profile.apifox.mode);
@@ -98,24 +100,26 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
   }
 
   return (
-    <section className="apifox-sync-panel">
-      <div className="apifox-panel-head">
-        <div><span>APIFOX OPENAPI</span><strong>连接并同步接口</strong></div>
-        <div className="sync-mode" role="group" aria-label="同步模式">
-          <button className={modeClass(mode, "online")} onClick={() => { setMode("online"); invalidate(); }} type="button">在线项目</button>
-          <button className={modeClass(mode, "local")} onClick={() => { setMode("local"); invalidate(); }} type="button">本地 URL</button>
-        </div>
-      </div>
-      <div className="apifox-form">
-        <SourceField localUrl={localUrl} mode={mode} projectId={projectId} setLocalUrl={(value) => { setLocalUrl(value); invalidate(); }} setProjectId={(value) => { setProjectId(value); invalidate(); }} />
-        <label><span><Link2 size={13} />Mock 前缀</span><input placeholder="留空则按项目 ID 生成" value={mockPrefix} onChange={(event) => { setMockPrefix(event.target.value); invalidate(); }} /></label>
-        <label><span><KeyRound size={13} />Access Token</span><input placeholder="可选" type="password" value={accessToken} onChange={(event) => { setAccessToken(event.target.value); invalidate(); }} /></label>
-        <label><span><KeyRound size={13} />Mock Token</span><input placeholder="可选" type="password" value={mockToken} onChange={(event) => setMockToken(event.target.value)} /></label>
-        <button className="outline-button" disabled={busy} onClick={validateConnection} type="button">验证连接</button>
-      </div>
-      <ConnectionResult availableTags={availableTags} busy={busy} selectedTags={selectedTags} validated={validated} onConfirm={confirmTags} onTags={changeTags} />
-      <InterfacePreviewPanel busy={busy} preview={preview} onApply={applySync} />
-    </section>
+    <>
+      <Button className="config-entry-button" icon={<RefreshCw size={15} />} onClick={() => setOpen(true)}>{apifoxEntryLabel(props.profile)}</Button>
+      <Modal className="apifox-sync-modal" footer={null} onCancel={() => setOpen(false)} open={open} title="连接并同步 Apifox 接口" width={720}>
+        <section className="apifox-sync-panel">
+          <div className="apifox-panel-head">
+            <div><span>APIFOX OPENAPI</span><strong>连接配置</strong></div>
+            <Segmented className="sync-mode" onChange={(value) => { setMode(value as "online" | "local"); invalidate(); }} options={[{ label: "在线项目", value: "online" }, { label: "本地 URL", value: "local" }]} value={mode} />
+          </div>
+          <Form className="apifox-form" layout="vertical" requiredMark={false}>
+            <SourceField localUrl={localUrl} mode={mode} projectId={projectId} setLocalUrl={(value) => { setLocalUrl(value); invalidate(); }} setProjectId={(value) => { setProjectId(value); invalidate(); }} />
+            <Form.Item label={<span><Link2 size={13} />Mock 前缀</span>}><Input placeholder="留空则按项目 ID 生成" value={mockPrefix} onChange={(event) => { setMockPrefix(event.target.value); invalidate(); }} /></Form.Item>
+            <Form.Item label={<span><KeyRound size={13} />Access Token</span>}><Input.Password placeholder="可选" value={accessToken} onChange={(event) => { setAccessToken(event.target.value); invalidate(); }} /></Form.Item>
+            <Form.Item label={<span><KeyRound size={13} />Mock Token</span>}><Input.Password placeholder="可选" value={mockToken} onChange={(event) => setMockToken(event.target.value)} /></Form.Item>
+            <div className="apifox-form-actions"><Button className="outline-button" loading={busy} onClick={validateConnection}>验证连接</Button></div>
+          </Form>
+          <ConnectionResult availableTags={availableTags} busy={busy} selectedTags={selectedTags} validated={validated} onConfirm={confirmTags} onTags={changeTags} />
+          <InterfacePreviewPanel busy={busy} preview={preview} onApply={applySync} />
+        </section>
+      </Modal>
+    </>
   );
 }
 
@@ -134,51 +138,30 @@ function ConnectionResult(props: ConnectionResultProps) {
   const disabled = props.busy || (requiresTag && props.selectedTags.length === 0);
   return (
     <div className="tag-sync-row">
-      <div className="validation-ok"><Check size={15} />连接验证成功，共发现 {props.availableTags.length} 个可选 Tag</div>
+      <Alert className="validation-ok" message={`连接验证成功，共发现 ${props.availableTags.length} 个可选 Tag`} showIcon type="success" />
       <TagMultiSelect options={props.availableTags} value={props.selectedTags} onChange={props.onTags} />
-      <button className="command-button" disabled={disabled} onClick={props.onConfirm} type="button">确认 Tag 并拉取接口</button>
+      <Button className="command-button" disabled={disabled} loading={props.busy} onClick={props.onConfirm} type="primary">确认 Tag 并拉取接口</Button>
     </div>
   );
 }
 
 function TagMultiSelect(props: { options: string[]; value: string[]; onChange: (tags: string[]) => void }) {
-  const [open, setOpen] = useState(false);
-  const [keyword, setKeyword] = useState("");
-  const visible = useMemo(() => props.options.filter((tag) => tag.toLowerCase().includes(keyword.toLowerCase())), [keyword, props.options]);
   if (props.options.length === 0) return <div className="tag-empty">OpenAPI 未声明 Tag，将同步全部接口</div>;
-  return (
-    <div className="tag-dropdown">
-      <button className="tag-dropdown-trigger" onClick={() => setOpen(!open)} type="button"><Tags size={14} /><span>{tagSelectionLabel(props.value)}</span><ChevronDown size={14} /></button>
-      <TagDropdownMenu keyword={keyword} onKeyword={setKeyword} onClose={() => setOpen(false)} onChange={props.onChange} open={open} options={visible} selected={props.value} />
-    </div>
-  );
-}
-
-function TagDropdownMenu(props: { open: boolean; keyword: string; options: string[]; selected: string[]; onKeyword: (value: string) => void; onChange: (tags: string[]) => void; onClose: () => void }) {
-  if (!props.open) return null;
-  return (
-    <div className="tag-dropdown-menu">
-      <label className="tag-dropdown-search"><Search size={14} /><input autoFocus placeholder="搜索 Tag" value={props.keyword} onChange={(event) => props.onKeyword(event.target.value)} /></label>
-      <div className="tag-dropdown-options">{props.options.map((tag) => <label key={tag}><input checked={props.selected.includes(tag)} onChange={() => props.onChange(toggleValue(props.selected, tag))} type="checkbox" /><span>{tag}</span></label>)}</div>
-      <div className="tag-dropdown-actions"><button onClick={() => props.onChange([])} type="button">清空</button><button onClick={props.onClose} type="button">完成</button></div>
-    </div>
-  );
+  return <Select allowClear className="tag-dropdown" maxTagCount="responsive" mode="multiple" onChange={props.onChange} options={props.options.map((tag) => ({ label: tag, value: tag }))} placeholder="请选择 Tag" showSearch value={props.value} />;
 }
 
 function InterfacePreviewPanel(props: { preview: ApifoxPreview | null; busy: boolean; onApply: () => Promise<void> }) {
   if (!props.preview) return null;
   return (
     <div className="interface-preview">
-      <div className="interface-preview-head"><div><strong>已拉取 {props.preview.selectedOperationCount} 个接口</strong><span>新增 {props.preview.addedCount} · 更新 {props.preview.updatedCount} · 删除 {props.preview.removedCount} · 保留 {props.preview.retainedCount}</span></div><button className="sync-submit" disabled={props.busy} onClick={props.onApply} type="button"><CloudDownload size={15} />确认同步这些接口</button></div>
-      <div className="interface-preview-list">{props.preview.interfaces.slice(0, 8).map((item) => <div key={item.id}><span className={`method-badge method-${item.method.toLowerCase()}`}>{item.method}</span><code>{item.path}</code><small>{item.name}</small></div>)}</div>
+      <div className="interface-preview-head"><div><strong>已拉取 {props.preview.selectedOperationCount} 个接口</strong><span>新增 {props.preview.addedCount} · 更新 {props.preview.updatedCount} · 删除 {props.preview.removedCount} · 保留 {props.preview.retainedCount}</span></div><Button className="sync-submit" icon={<CloudDownload size={15} />} loading={props.busy} onClick={props.onApply} type="primary">确认同步这些接口</Button></div>
+      <List className="interface-preview-list" dataSource={props.preview.interfaces.slice(0, 8)} renderItem={(item) => <List.Item key={item.id}><span className={`method-badge method-${item.method.toLowerCase()}`}>{item.method}</span><code>{item.path}</code><small>{item.name}</small></List.Item>} />
       <PreviewRemainder total={props.preview.interfaces.length} />
     </div>
   );
 }
 
 interface SourceFieldProps { mode: "online" | "local"; projectId: string; localUrl: string; setProjectId: (value: string) => void; setLocalUrl: (value: string) => void; }
-function SourceField(props: SourceFieldProps) { if (props.mode === "online") return <label><span><Link2 size={13} />项目 ID</span><input required value={props.projectId} onChange={(event) => props.setProjectId(event.target.value)} /></label>; return <label><span><Link2 size={13} />OpenAPI URL</span><input required value={props.localUrl} onChange={(event) => props.setLocalUrl(event.target.value)} /></label>; }
-function toggleValue(values: string[], value: string) { if (values.includes(value)) return values.filter((item) => item !== value); return [...values, value]; }
-function modeClass(active: string, button: string) { if (active === button) return "sync-mode-active"; return ""; }
-function tagSelectionLabel(tags: string[]) { if (tags.length === 0) return "请选择 Tag"; if (tags.length === 1) return tags[0]; return `已选择 ${tags.length} 个 Tag`; }
+function SourceField(props: SourceFieldProps) { if (props.mode === "online") return <Form.Item label={<span><Link2 size={13} />项目 ID</span>} required><Input value={props.projectId} onChange={(event) => props.setProjectId(event.target.value)} /></Form.Item>; return <Form.Item label={<span><Link2 size={13} />OpenAPI URL</span>} required><Input value={props.localUrl} onChange={(event) => props.setLocalUrl(event.target.value)} /></Form.Item>; }
 function PreviewRemainder({ total }: { total: number }) { if (total <= 8) return null; return <small className="preview-remainder">另有 {total - 8} 个接口将在确认后同步</small>; }
+function apifoxEntryLabel(profile: ProjectProfile) { if (profile.syncedTags.length > 0) return `Apifox 接口 · ${profile.rules.filter((rule) => rule.source === "apifox").length} 条`; return "连接 Apifox"; }

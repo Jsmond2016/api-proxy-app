@@ -1,11 +1,13 @@
-import { FolderPlus, Layers3, Pencil, Trash2, X } from "lucide-react";
+import { Button, Form, Input, InputNumber, Modal, Tooltip } from "antd";
+import classNames from "classnames";
+import { FolderPlus, Layers3, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
 import type { ProfileInput, ProjectProfile } from "../types";
 
 interface ProjectSidebarProps {
   profiles: ProjectProfile[];
   activeProfileId: string | null;
+  appVersion: string;
   disabled: boolean;
   onCreate: (input: ProfileInput) => Promise<void>;
   onDelete: (profileId: string) => Promise<void>;
@@ -50,28 +52,27 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
     <aside className="project-sidebar">
       <div className="brand-lockup">
         <div className="brand-mark">A</div>
-        <div><p className="brand-name">APIFOX PROXY</p><p className="brand-caption">WECHAT DEVTOOLS</p></div>
+        <div className="brand-copy">
+          <div className="brand-title-row"><p className="brand-name">APIFOX PROXY</p><span className="brand-version">v{props.appVersion}</span></div>
+          <p className="brand-caption">WECHAT DEVTOOLS</p>
+        </div>
       </div>
       <div className="sidebar-label-row">
         <span>联调项目</span>
-        <button className="icon-button" disabled={props.disabled} onClick={openCreate} title="新建项目" type="button">
-          <FolderPlus size={16} />
-        </button>
+        <Tooltip title="新建项目"><Button aria-label="新建项目" className="icon-button" disabled={props.disabled} icon={<FolderPlus size={16} />} onClick={openCreate} type="text" /></Tooltip>
       </div>
       <nav className="project-list" aria-label="联调项目">
         {props.profiles.map((profile) => (
-          <button className={profileClass(profile.id, props.activeProfileId)} key={profile.id} onClick={() => props.onSelect(profile.id)} type="button">
+          <Button className={profileClass(profile.id, props.activeProfileId)} key={profile.id} onClick={() => props.onSelect(profile.id)} type="text">
             <Layers3 size={17} /><span>{profile.name}</span><small>{profile.rules.length}</small>
-          </button>
+          </Button>
         ))}
       </nav>
       <div className="sidebar-bottom">
-        <button className="sidebar-utility" disabled={!props.activeProfileId || props.disabled} onClick={openEdit} type="button">
-          <Pencil size={16} />编辑当前项目
-        </button>
-        <button className="sidebar-utility danger-utility" disabled={!props.activeProfileId || props.disabled} onClick={removeCurrent} type="button">
-          <Trash2 size={16} />删除当前项目
-        </button>
+        <Button className="sidebar-utility" disabled={!props.activeProfileId || props.disabled} icon={<Pencil size={16} />} onClick={openEdit} type="text">
+          编辑当前项目
+        </Button>
+        <Button className="sidebar-utility danger-utility" danger disabled={!props.activeProfileId || props.disabled} icon={<Trash2 size={16} />} onClick={removeCurrent} type="text">删除当前项目</Button>
       </div>
       <ProfileDialog
         key={editing?.id || String(creating)}
@@ -95,21 +96,14 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
 function DeleteProjectDialog(props: { visible: boolean; busy: boolean; profile: ProjectProfile | null; onCancel: () => void; onConfirm: () => Promise<void> }) {
   if (!props.visible || !props.profile) return null;
   return (
-    <div className="modal-backdrop" role="presentation">
-      <section aria-modal="true" className="modal-panel confirm-panel" role="dialog">
-        <div className="modal-head"><h2>删除项目</h2><button className="icon-button" onClick={props.onCancel} type="button"><X size={17} /></button></div>
-        <p>确定删除“{props.profile.name}”及其本地规则吗？该项目配置中的 Access Token 和 Mock Token 也会删除。</p>
-        <div className="modal-actions"><button className="outline-button" disabled={props.busy} onClick={props.onCancel} type="button">取消</button><button className="danger-button" disabled={props.busy} onClick={props.onConfirm} type="button">确认删除</button></div>
-      </section>
-    </div>
+    <Modal cancelText="取消" confirmLoading={props.busy} okButtonProps={{ danger: true }} okText="确认删除" onCancel={props.onCancel} onOk={props.onConfirm} open title="删除项目">
+      <p>确定删除“{props.profile.name}”及其本地 Mock 接口吗？该项目配置中的 Access Token 和 Mock Token 也会删除。</p>
+    </Modal>
   );
 }
 
 function profileClass(id: string, activeId: string | null) {
-  if (id === activeId) {
-    return "project-item project-item-active";
-  }
-  return "project-item";
+  return classNames("project-item", { "project-item-active": id === activeId });
 }
 
 interface ProfileDialogProps {
@@ -141,8 +135,7 @@ function ProfileDialog(props: ProfileDialogProps) {
     return null;
   }
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  async function submit() {
     const input: ProfileInput = {
       name,
       sourceHosts: hosts.split(",").map((host) => host.trim()).filter(Boolean),
@@ -166,16 +159,14 @@ function ProfileDialog(props: ProfileDialogProps) {
   }
 
   return (
-    <div className="modal-backdrop" role="presentation">
-      <form className="modal-panel" onSubmit={submit}>
-        <div className="modal-head"><h2>{profileDialogTitle(props.profile)}</h2><button className="icon-button" onClick={props.onClose} type="button"><X size={17} /></button></div>
-        <label>项目名称<input autoFocus required value={name} onChange={(event) => setName(event.target.value)} /></label>
-        <label>源域名（多个用逗号分隔）<input placeholder="api.example.com" required value={hosts} onChange={(event) => setHosts(event.target.value)} /></label>
-        <label>路径前缀<input placeholder="/api，可留空" value={pathPrefix} onChange={(event) => setPathPrefix(event.target.value)} /></label>
-        <label>本地代理端口<input max="65535" min="1" required type="number" value={port} onChange={(event) => setPort(event.target.value)} /></label>
-        <div className="modal-actions"><button className="outline-button" onClick={props.onClose} type="button">取消</button><button className="command-button" disabled={busy} type="submit">保存</button></div>
-      </form>
-    </div>
+    <Modal cancelText="取消" confirmLoading={busy} destroyOnHidden okButtonProps={{ disabled: !name.trim() || !hosts.trim() || Number(port) < 1 || Number(port) > 65535 }} okText="保存" onCancel={props.onClose} onOk={submit} open title={profileDialogTitle(props.profile)}>
+      <Form layout="vertical" requiredMark={false}>
+        <Form.Item label="项目名称" required><Input autoFocus value={name} onChange={(event) => setName(event.target.value)} /></Form.Item>
+        <Form.Item label="源域名（多个用逗号分隔）" required><Input placeholder="api.example.com" value={hosts} onChange={(event) => setHosts(event.target.value)} /></Form.Item>
+        <Form.Item label="路径前缀"><Input placeholder="/api，可留空" value={pathPrefix} onChange={(event) => setPathPrefix(event.target.value)} /></Form.Item>
+        <Form.Item label="本地代理端口" required><InputNumber max={65535} min={1} value={Number(port)} onChange={(value) => setPort(String(value || ""))} /></Form.Item>
+      </Form>
+    </Modal>
   );
 }
 

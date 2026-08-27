@@ -1,3 +1,4 @@
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -6,12 +7,27 @@ import type {
   ApifoxRequest,
   DesktopSnapshot,
   ProfileInput,
+  OperationResolution,
+  ResolveOperationInput,
   RequestLog,
   RuleInput,
 } from "../types";
 
 export function isDesktopRuntime() {
   return "__TAURI_INTERNALS__" in window;
+}
+
+export const buildVersion = __APP_VERSION__;
+
+export async function getAppVersion() {
+  if (!isDesktopRuntime()) {
+    return buildVersion;
+  }
+  try {
+    return await getVersion();
+  } catch {
+    return buildVersion;
+  }
 }
 
 function desktopRequired(): never {
@@ -50,6 +66,13 @@ export async function validateApifox(request: ApifoxRequest) {
 
 export async function syncApifox(request: ApifoxRequest) {
   return invokeDesktop("sync_apifox", { request });
+}
+
+export async function resolveApifoxOperation(input: ResolveOperationInput) {
+  if (!isDesktopRuntime()) {
+    return desktopRequired();
+  }
+  return invoke<OperationResolution>("resolve_apifox_operation", { input });
 }
 
 export async function saveRule(input: RuleInput) {

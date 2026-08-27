@@ -209,6 +209,33 @@ pub struct InterfacePreview {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ResolveOperationInput {
+    pub profile_id: String,
+    pub url: String,
+    pub method: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperationResolution {
+    pub match_count: usize,
+    pub interface: Option<ResolvedInterface>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedInterface {
+    pub name: String,
+    pub method: String,
+    pub path: String,
+    pub match_mode: MatchMode,
+    pub target: String,
+    pub tags: Vec<String>,
+    pub apifox_web_url: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RuleInput {
     pub id: Option<String>,
     pub profile_id: String,
@@ -221,6 +248,8 @@ pub struct RuleInput {
     #[serde(default)]
     pub tags: Vec<String>,
     pub priority: i32,
+    #[serde(default)]
+    pub apifox_web_url: String,
 }
 
 #[cfg(test)]

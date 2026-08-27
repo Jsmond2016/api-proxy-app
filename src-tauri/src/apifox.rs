@@ -48,6 +48,11 @@ pub struct ParsedDocument {
     pub available_tags: Vec<String>,
 }
 
+pub struct OperationMatch {
+    pub operation: Option<ImportedOperation>,
+    pub match_count: usize,
+}
+
 pub async fn fetch_document(
     request: &ApifoxRequest,
     access_token: Option<&str>,
@@ -238,6 +243,64 @@ pub fn replace_rules(existing: &[ProxyRule], incoming: Vec<ProxyRule>) -> Vec<Pr
     result
 }
 
+pub fn find_operation(
+    operations: &[ImportedOperation],
+    input_url: &str,
+    preferred_method: &str,
+) -> OperationMatch {
+    let input_path = normalize_lookup_path(input_url);
+    if input_path.is_empty() {
+        return OperationMatch {
+            operation: None,
+            match_count: 0,
+        };
+    }
+    let mut matches = Vec::new();
+    let mut exact_matches = Vec::new();
+    for operation in operations {
+        let operation_path = normalize_lookup_path(&operation.path);
+        let exact = operation_path == input_path;
+        let fuzzy = operation_path.contains(&input_path) || input_path.contains(&operation_path);
+        if !fuzzy {
+            continue;
+        }
+        matches.push(operation.clone());
+        if exact {
+            exact_matches.push(operation.clone());
+        }
+    }
+    if !exact_matches.is_empty() {
+        let method = preferred_method.trim().to_uppercase();
+        if !method.is_empty() {
+            let preferred = exact_matches
+                .iter()
+                .filter(|operation| operation.method == method)
+                .cloned()
+                .collect::<Vec<_>>();
+            if preferred.len() == 1 {
+                return OperationMatch {
+                    operation: preferred.first().cloned(),
+                    match_count: 1,
+                };
+            }
+        }
+        return OperationMatch {
+            operation: exact_matches.first().cloned(),
+            match_count: 1,
+        };
+    }
+    if matches.len() == 1 {
+        return OperationMatch {
+            operation: matches.first().cloned(),
+            match_count: 1,
+        };
+    }
+    OperationMatch {
+        operation: None,
+        match_count: matches.len(),
+    }
+}
+
 pub fn apply_mock_token(rules: &mut [ProxyRule], mock_token: &str) -> Result<(), String> {
     for rule in rules {
         if rule.source != RuleSource::Apifox {
@@ -364,6 +427,35 @@ fn is_http_method(method: &str) -> bool {
     )
 }
 
+fn normalize_lookup_path(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    let path = url::Url::parse(trimmed)
+        .map(|parsed| parsed.path().to_string())
+        .unwrap_or_else(|_| {
+            trimmed
+                .split(['?', '#'])
+                .next()
+                .unwrap_or_default()
+                .to_string()
+        });
+    let mut normalized = path
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>()
+        .join("/");
+    if normalized.is_empty() {
+        return "/".to_string();
+    }
+    normalized.insert(0, '/');
+    normalized
+        .to_lowercase()
+        .replace("%7b", "{")
+        .replace("%7d", "}")
+}
+
 fn build_mock_target(mock_prefix: &str, path: &str) -> Result<String, String> {
     let mut target =
         url::Url::parse(mock_prefix).map_err(|error| format!("Mock prefix is invalid: {error}"))?;
@@ -396,7 +488,7 @@ fn target_with_mock_token(target: &str, mock_token: &str) -> Result<String, Stri
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_mock_token, build_rules, parse_document, replace_rules};
+    use super::{apply_mock_token, build_rules, find_operation, parse_document, replace_rules};
     use crate::model::{MatchMode, RuleSource};
 
     const FIXTURE: &str = r#"
@@ -435,6 +527,38 @@ mod tests {
         assert_eq!(rules[0].match_mode, MatchMode::Template);
         let target = url::Url::parse(&rules[0].target).expect("target should parse");
         assert_eq!(target.path(), "/m1/project/v1/orders/%7Bid%7D");
+    }
+
+    #[test]
+    fn resolves_operation_from_full_url_with_exact_path_and_method() {
+        let document = parse_document(FIXTURE).expect("fixture should parse");
+        let result = find_operation(
+            &document.operations,
+            "https://api.example.test/v1/orders/{id}?source=form",
+            "POST",
+        );
+        assert_eq!(result.match_count, 1);
+        let operation = result.operation.expect("operation should resolve");
+        assert_eq!(operation.name, "更新订单");
+        assert_eq!(operation.path, "/v1/orders/{id}");
+        assert_eq!(operation.method, "POST");
+    }
+
+    #[test]
+    fn resolves_unique_fuzzy_operation_and_reports_ambiguous_input() {
+        let document = parse_document(FIXTURE).expect("fixture should parse");
+        let unique = find_operation(&document.operations, "orders/{id}", "");
+        assert_eq!(unique.match_count, 1);
+        assert_eq!(
+            unique.operation.expect("unique operation").path,
+            "/v1/orders/{id}"
+        );
+        let ambiguous = find_operation(&document.operations, "/v1", "");
+        assert_eq!(ambiguous.match_count, 2);
+        assert!(ambiguous.operation.is_none());
+        let missing = find_operation(&document.operations, "/missing", "");
+        assert_eq!(missing.match_count, 0);
+        assert!(missing.operation.is_none());
     }
 
     #[test]

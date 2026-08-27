@@ -1,4 +1,5 @@
-import { AlertCircle, Monitor, X } from "lucide-react";
+import { Alert, App as AntApp, Button, Empty, Spin } from "antd";
+import { AlertCircle, Monitor } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ApifoxSyncPanel } from "./components/ApifoxSyncPanel";
 import { CertificatePanel } from "./components/CertificatePanel";
@@ -8,21 +9,22 @@ import { ProjectSidebar } from "./components/ProjectSidebar";
 import { ProxyHeader } from "./components/ProxyHeader";
 import { RequestLogPanel } from "./components/RequestLogPanel";
 import { RuleTable } from "./components/RuleTable";
-import { ToastViewport } from "./components/ToastViewport";
 import * as desktop from "./lib/desktop";
-import type { ApifoxRequest, DesktopSnapshot, DiagnosticEntry, RequestLog, RuleInput, ToastMessage } from "./types";
+import type { ApifoxRequest, DesktopSnapshot, DiagnosticEntry, RequestLog, RuleInput } from "./types";
 import "./App.css";
 
 function App() {
+  const { message } = AntApp.useApp();
   const [snapshot, setSnapshot] = useState<DesktopSnapshot | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState("");
   const [diagnostics, setDiagnostics] = useState<DiagnosticEntry[]>([]);
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [appVersion, setAppVersion] = useState(desktop.buildVersion);
 
   useEffect(() => {
     let unsubscribe: () => void = () => undefined;
     void loadSnapshot();
+    void desktop.getAppVersion().then(setAppVersion);
     void desktop.subscribeProxyEvents(setSnapshot, mergeRequestLog).then((stop) => { unsubscribe = stop; }).catch((reason) => { showError(reason); recordDiagnostic("error", "事件订阅", errorMessage(reason)); });
     return () => unsubscribe();
   }, []);
@@ -61,18 +63,8 @@ function App() {
     setDiagnostics((current) => [entry, ...current].slice(0, 100));
   }
 
-  function notify(level: ToastMessage["level"], title: string, message: string) {
-    const toast: ToastMessage = {
-      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      level,
-      title,
-      message,
-    };
-    setToasts((current) => [toast, ...current].slice(0, 4));
-  }
-
-  function dismissToast(id: string) {
-    setToasts((current) => current.filter((toast) => toast.id !== id));
+  function notify(level: "success" | "error", title: string, detail: string) {
+    void message.open({ type: level, content: `${title}：${detail}` });
   }
 
   function mergeRequestLog(log: RequestLog) {
@@ -133,9 +125,9 @@ function App() {
 
   return (
     <main className="app-shell">
-      <ToastViewport onDismiss={dismissToast} toasts={toasts} />
       <ProjectSidebar
         activeProfileId={snapshot.activeProfileId}
+        appVersion={appVersion}
         disabled={snapshot.proxyStatus === "running"}
         profiles={snapshot.profiles}
         onCreate={(input) => apply(desktop.createProfile(input), "创建项目")}
@@ -160,9 +152,9 @@ function App() {
 }
 
 function InitializationState(props: { busy: boolean; error: string; onRetry: () => Promise<void> }) {
-  if (props.busy) return <main className="app-loading">正在读取本地配置...</main>;
+  if (props.busy) return <main className="app-loading"><Spin tip="正在读取本地配置..." size="large"><div className="loading-space" /></Spin></main>;
   return (
-    <main className="app-loading"><section className="initialization-error"><AlertCircle size={28} /><h1>应用初始化失败</h1><p>{props.error}</p><button className="command-button" onClick={props.onRetry} type="button">重试</button></section></main>
+    <main className="app-loading"><section className="initialization-error"><AlertCircle size={28} /><h1>应用初始化失败</h1><p>{props.error}</p><Button type="primary" onClick={props.onRetry}>重试</Button></section></main>
   );
 }
 
@@ -181,28 +173,30 @@ function Workspace(props: WorkspaceProps) {
     <>
       <ProxyHeader profile={profile} status={props.snapshot.proxyStatus} onStart={() => props.apply(desktop.startProxy(), "启动代理")} onStop={() => props.apply(desktop.stopProxy(), "停止代理")} />
       <div className="workspace-grid">
-        <CertificatePanel certificate={props.snapshot.certificate} onGenerate={() => props.apply(desktop.generateCertificate(), "生成证书")} onOpen={() => props.execute(desktop.openCertificate(), "打开证书")} onRefresh={() => props.apply(desktop.refreshCertificate(), "刷新证书信任")} />
         <ConnectionGuide certificate={props.snapshot.certificate} hasTraffic={props.snapshot.logs.length > 0} profile={profile} proxyStatus={props.snapshot.proxyStatus} />
-        <ApifoxSyncPanel profile={profile} onSync={(request) => props.apply(desktop.syncApifox(request), "同步 Apifox 规则")} onValidate={props.validateApifox} />
+        <div className="workspace-config-actions">
+          <ApifoxSyncPanel profile={profile} onSync={(request) => props.apply(desktop.syncApifox(request), "同步 Apifox 接口")} onValidate={props.validateApifox} />
+          <CertificatePanel certificate={props.snapshot.certificate} onGenerate={() => props.apply(desktop.generateCertificate(), "生成证书")} onOpen={() => props.execute(desktop.openCertificate(), "打开证书")} onRefresh={() => props.apply(desktop.refreshCertificate(), "刷新证书信任")} />
+        </div>
       </div>
-      <RuleTable profile={profile} onDelete={(id) => props.apply(desktop.deleteRule(profile.id, id), "删除规则")} onOpenUrl={(url) => props.execute(desktop.openExternalUrl(url), "打开 Apifox 接口")} onReset={() => props.apply(desktop.clearRules(profile.id), "重置规则列表")} onSave={(input: RuleInput) => props.apply(desktop.saveRule(input), "保存规则")} onToggle={(id, enabled) => props.apply(desktop.setRuleEnabled(profile.id, id, enabled), "切换接口 Mock")} onToggleGlobal={(enabled) => props.apply(desktop.setGlobalMockEnabled(profile.id, enabled), "切换全局 Mock")} />
+      <RuleTable profile={profile} onDelete={(id) => props.apply(desktop.deleteRule(profile.id, id), "删除 Mock 接口")} onOpenUrl={(url) => props.execute(desktop.openExternalUrl(url), "打开 Apifox 接口")} onReset={() => props.apply(desktop.clearRules(profile.id), "重置 Mock 接口列表")} onResolve={desktop.resolveApifoxOperation} onSave={(input: RuleInput) => props.apply(desktop.saveRule(input), "保存 Mock 接口")} onToggle={(id, enabled) => props.apply(desktop.setRuleEnabled(profile.id, id, enabled), "切换接口 Mock")} onToggleGlobal={(enabled) => props.apply(desktop.setGlobalMockEnabled(profile.id, enabled), "切换全局 Mock")} />
       <RequestLogPanel logs={props.snapshot.logs} onClear={() => props.apply(desktop.clearLogs(), "清空请求记录")} />
     </>
   );
 }
 
 function EmptyWorkspace() {
-  return <section className="empty-workspace"><Monitor size={36} /><h1>创建第一个联调项目</h1><p>点击左侧项目标题旁的新增图标，配置小程序真实接口域名和本地代理端口。</p></section>;
+  return <section className="empty-workspace"><Empty image={<Monitor size={36} />} description={<><h1>创建第一个联调项目</h1><p>点击左侧项目标题旁的新增图标，配置小程序真实接口域名和本地代理端口。</p></>} /></section>;
 }
 
 function RuntimeNotice() {
   if (desktop.isDesktopRuntime()) return null;
-  return <div className="runtime-notice"><AlertCircle size={16} />当前为网页预览，网络代理、本地配置和证书功能只在打包后的桌面应用中可用。</div>;
+  return <Alert className="runtime-notice" message="当前为网页预览，网络代理、本地配置和证书功能只在打包后的桌面应用中可用。" showIcon type="warning" />;
 }
 
 function ErrorBanner({ error, onClose }: { error: string; onClose: () => void }) {
   if (!error) return null;
-  return <div className="error-banner"><AlertCircle size={17} /><span>{error}</span><button className="icon-button" onClick={onClose} type="button"><X size={16} /></button></div>;
+  return <Alert className="error-banner" closable message={error} onClose={onClose} showIcon type="error" />;
 }
 
 function errorMessage(reason: unknown) {

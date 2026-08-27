@@ -1,6 +1,6 @@
 [package]
 name = "tauri-app"
-version = "0.1.0"
+version = "0.1.6"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -24,6 +24,12 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 hudsucker = "0.25"
+hyper-util = { version = "0.1.20", features = ["client-legacy"] }
 sha2 = "0.10"
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "sync"] }
 regex = "1"
+url = "2"
+
+[dev-dependencies]
+hyper-rustls = "0.27.9"
+tokio-rustls = "0.26.4"

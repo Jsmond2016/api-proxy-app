@@ -1,127 +1,149 @@
 import { invoke } from "@tauri-apps/api/core";
-import { demoSnapshot } from "../features/workspace/mockData";
-import type { DesktopSnapshot, OpenApiSyncInput, ProxyStatus } from "../types";
+import { listen } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import type {
+  ApifoxPreview,
+  ApifoxRequest,
+  DesktopSnapshot,
+  ProfileInput,
+  RequestLog,
+  RuleInput,
+} from "../types";
 
-let browserSnapshot = cloneSnapshot(demoSnapshot);
-
-function isTauriRuntime() {
+export function isDesktopRuntime() {
   return "__TAURI_INTERNALS__" in window;
 }
 
-function cloneSnapshot(snapshot: DesktopSnapshot) {
-  return JSON.parse(JSON.stringify(snapshot)) as DesktopSnapshot;
+function desktopRequired(): never {
+  throw new Error("该功能需要在 Apifox Proxy 桌面应用中运行。");
 }
 
 export async function getDesktopSnapshot() {
-  if (isTauriRuntime()) {
-    return invoke<DesktopSnapshot>("get_snapshot");
+  if (!isDesktopRuntime()) {
+    return emptySnapshot();
   }
-
-  return browserSnapshot;
+  return invoke<DesktopSnapshot>("get_snapshot");
 }
 
-export async function changeProxyStatus(status: ProxyStatus) {
-  if (isTauriRuntime()) {
-    return invoke<DesktopSnapshot>("set_proxy_status", { status });
-  }
-
-  browserSnapshot = {
-    ...browserSnapshot,
-    proxyStatus: status,
-  };
-  return browserSnapshot;
+export async function createProfile(input: ProfileInput) {
+  return invokeDesktop("create_profile", { input });
 }
 
-export async function startProxy() {
-  if (isTauriRuntime()) {
-    return invoke<DesktopSnapshot>("start_proxy");
-  }
-
-  return changeProxyStatus("running");
+export async function updateProfile(input: ProfileInput) {
+  return invokeDesktop("update_profile", { input });
 }
 
-export async function stopProxy() {
-  if (isTauriRuntime()) {
-    return invoke<DesktopSnapshot>("stop_proxy");
-  }
-
-  return changeProxyStatus("stopped");
+export async function deleteProfile(profileId: string) {
+  return invokeDesktop("delete_profile", { profileId });
 }
 
-export async function changeActiveProfile(profileId: string) {
-  if (isTauriRuntime()) {
-    return invoke<DesktopSnapshot>("set_active_profile", { profileId });
-  }
-
-  browserSnapshot = {
-    ...browserSnapshot,
-    activeProfileId: profileId,
-  };
-  return browserSnapshot;
+export async function setActiveProfile(profileId: string) {
+  return invokeDesktop("set_active_profile", { profileId });
 }
 
-export async function changeRuleState(ruleId: string, enabled: boolean) {
-  if (isTauriRuntime()) {
-    return invoke<DesktopSnapshot>("set_rule_enabled", { ruleId, enabled });
+export async function validateApifox(request: ApifoxRequest) {
+  if (!isDesktopRuntime()) {
+    return desktopRequired();
   }
+  return invoke<ApifoxPreview>("validate_apifox", { request });
+}
 
-  browserSnapshot = {
-    ...browserSnapshot,
-    profiles: browserSnapshot.profiles.map((profile) => ({
-      ...profile,
-      rules: profile.rules.map((rule) => {
-        if (rule.id === ruleId) {
-          return {
-            ...rule,
-            enabled,
-          };
-        }
+export async function syncApifox(request: ApifoxRequest) {
+  return invokeDesktop("sync_apifox", { request });
+}
 
-        return rule;
-      }),
-    })),
-  };
-  return browserSnapshot;
+export async function saveRule(input: RuleInput) {
+  return invokeDesktop("save_rule", { input });
+}
+
+export async function deleteRule(profileId: string, ruleId: string) {
+  return invokeDesktop("delete_rule", { profileId, ruleId });
+}
+
+export async function clearRules(profileId: string) {
+  return invokeDesktop("clear_rules", { profileId });
+}
+
+export async function setRuleEnabled(profileId: string, ruleId: string, enabled: boolean) {
+  return invokeDesktop("set_rule_enabled", { profileId, ruleId, enabled });
+}
+
+export async function setGlobalMockEnabled(profileId: string, enabled: boolean) {
+  return invokeDesktop("set_global_mock_enabled", { profileId, enabled });
 }
 
 export async function generateCertificate() {
-  if (isTauriRuntime()) {
-    return invoke<DesktopSnapshot>("generate_certificate");
-  }
-
-  browserSnapshot = {
-    ...browserSnapshot,
-    certificate: {
-      generated: true,
-      trusted: false,
-      fingerprint: "2F:7A:4B:90:CD:11:9E:82",
-    },
-  };
-  return browserSnapshot;
+  return invokeDesktop("generate_certificate");
 }
 
-export async function syncOpenApi(input: OpenApiSyncInput) {
-  if (isTauriRuntime()) {
-    return invoke<DesktopSnapshot>("sync_openapi", { request: input });
+export async function refreshCertificate() {
+  return invokeDesktop("refresh_certificate");
+}
+
+export async function openCertificate() {
+  if (!isDesktopRuntime()) {
+    return desktopRequired();
   }
+  return invoke<void>("open_certificate");
+}
 
-  browserSnapshot = {
-    ...browserSnapshot,
-    profiles: browserSnapshot.profiles.map((profile) => {
-      if (profile.id === input.profileId) {
-        return {
-          ...profile,
-          apifox: {
-            mode: input.mode,
-            source: input.sourceUrl,
-            mockPrefix: input.mockPrefix,
-            selectedTags: input.selectedTags,
-          },
-        };
-      }
+export async function openExternalUrl(url: string) {
+  if (!isDesktopRuntime()) {
+    return desktopRequired();
+  }
+  return openUrl(url);
+}
 
-      return profile;
-    }),
+export async function clearLogs() {
+  return invokeDesktop("clear_logs");
+}
+
+export async function startProxy() {
+  return invokeDesktop("start_proxy");
+}
+
+export async function stopProxy() {
+  return invokeDesktop("stop_proxy");
+}
+
+export async function subscribeProxyEvents(
+  onSnapshot: (snapshot: DesktopSnapshot) => void,
+  onRequest: (log: RequestLog) => void,
+) {
+  if (!isDesktopRuntime()) {
+    return () => undefined;
+  }
+  const unlistenSnapshot = await listen<DesktopSnapshot>("proxy://snapshot", (event) => {
+    onSnapshot(event.payload);
+  });
+  const unlistenRequest = await listen<RequestLog>("proxy://request", (event) => {
+    onRequest(event.payload);
+  });
+  return () => {
+    unlistenSnapshot();
+    unlistenRequest();
   };
-  return browserSnapshot;
+}
+
+function invokeDesktop(command: string, args?: Record<string, unknown>) {
+  if (!isDesktopRuntime()) {
+    return desktopRequired();
+  }
+  return invoke<DesktopSnapshot>(command, args);
+}
+
+function emptySnapshot(): DesktopSnapshot {
+  return {
+    schemaVersion: 2,
+    profiles: [],
+    activeProfileId: null,
+    proxyStatus: "stopped",
+    certificate: {
+      generated: false,
+      trusted: false,
+      fingerprint: "",
+      certificatePath: "",
+    },
+    logs: [],
+  };
 }

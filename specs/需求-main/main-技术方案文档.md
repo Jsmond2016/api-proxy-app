@@ -1,0 +1,397 @@
+# 微信开发者工具 Apifox Mock 代理修复 技术方案文档
+
+## 开发分支
+
+`main`
+
+## 方案概览
+
+本方案将当前 UI 原型重构为具备真实闭环的 Tauri 2 桌面代理。React 负责项目、Apifox、Tag、规则、证书和日志工作台；Rust 负责版本化配置、Apifox OpenAPI 导出、规则编译、HTTP/HTTPS 代理、CA 管理和事件推送。
+
+实现按最小可验证增量推进：先建立真实配置和安全状态模型，再接通 Apifox/Tag，再修复代理匹配与实时事件，最后完成 CA、微信开发者工具和打包验收。任何阶段都不得以静态演示数据代替真实结果。
+
+## 代码范围（可选）
+
+| 分类 | 内容 |
+| --- | --- |
+| 路由 | Tauri 主窗口内部视图，不新增 Web 路由 |
+| 代码文件 | 重构 `src/App.tsx`、`src/components/`、`src/lib/desktop.ts`、`src/types.ts`；拆分 `src-tauri/src/commands.rs`、`state.rs`、`apifox.rs`、`proxy/`；新增配置、凭据、证书、事件和测试模块 |
+| 关联接口 | Apifox OpenAPI 导出 API、本地 OpenAPI URL、Tauri commands/events、loopback HTTP/HTTPS proxy |
+| 功能点 | 项目 CRUD、本地 Token 配置、Tag 同步、规则编译、HTTP/HTTPS MITM、证书信任、实时日志、迁移、E2E 和打包 |
+
+## 总体架构
+
+```text
+React 工作台
+  ├─ 项目与代理配置
+  ├─ Apifox 连接与 Tag 同步
+  ├─ 全局 Mock 与规则管理
+  ├─ CA / 微信开发者工具接入
+  └─ 实时请求日志
+          │ Tauri commands + events
+          ▼
+Rust Application Services
+  ├─ ConfigStore（版本化 JSON、原子写入、迁移）
+  ├─ Profile Config（包含 Access/Mock Token）
+  ├─ ApifoxService（在线 POST / 本地 GET / Tag 解析）
+  ├─ RuleService（稳定 ID、同步合并、运行时编译）
+  ├─ CertificateService（CA、权限、指纹、信任检测）
+  └─ ProxyService（生命周期、HTTP/HTTPS、日志事件）
+          │
+          ▼
+127.0.0.1:<port>  ←  微信开发者工具显式 HTTP/HTTPS 代理
+          │
+          ├─ 未命中：原始服务透传
+          └─ 命中：Apifox Mock（安全附加 Mock Token）
+```
+
+## 需求-方案映射
+
+| 需求 ID | 开发方案 | 影响范围 | 使用模型 | 验证方式 | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| R1 | 新增 Project CRUD commands 和编辑表单；删除硬编码演示档案；校验域名、路径前缀和端口；持久化真实项目 | `model/config/commands`、项目侧栏和项目设置组件 | GPT-5 Codex | Rust 配置测试、前端交互测试、重启恢复测试 | 已确认 |
+| R2 | `ApifoxService` 区分 online/local；online 按参考项目发送带版本头和 Bearer Token 的 POST；local GET 完整 URL；统一校验 OpenAPI | `apifox.rs`、Apifox 配置 UI、错误模型 | GPT-5 Codex | mock server 契约测试、错误分支测试、真实账号人工验证 | 已确认 |
+| R3 | 使用 Keychain 服务保存每 Profile 的 Access/Mock Token；目标 URL 使用结构化 Query 合并追加 `apifoxToken`；所有输出脱敏 | 新增 `credentials.rs`、`Cargo.toml`、代理改写和配置 UI | GPT-5 Codex | Keychain 读写删除测试、序列化无凭据断言、日志脱敏测试 | 已废弃：由 R15 替代 |
+| R4 | 解析 OpenAPI 顶层及 operation tags；提供 Tag 搜索多选和历史；规则以 operation/source ID 稳定标识；同步前计算 diff | `apifox/rules/config`、Tag 同步对话框 | GPT-5 Codex | fixture、diff、刷新保留自定义规则测试 | 已确认：同步策略部分由 R18 替代 |
+| R5 | 新增 `activeTags`，与 `syncedTags` 分离；Tag 控件调用 Rust command 原子更新；编译规则时同时判断 active tag 和 rule enabled | 数据模型、RuleService、Tag 控件、状态摘要 | GPT-5 Codex | 多 Tag 激活矩阵测试、切换后即时命中测试 | 已废弃：由 R13 替代 |
+| R6 | 匹配管线固定为 host -> pathPrefix -> method -> rule；OpenAPI 模板路径编译为转义后的 segment regex；实现规则 CRUD、优先级和冲突校验 | `proxy/matcher.rs`、`rules.rs`、规则编辑 UI | GPT-5 Codex | 表驱动匹配测试、跨域不命中测试、动态路径和冲突测试 | 已确认 |
+| R7 | ProxyService 在 bind 成功后才发布 running；持有真实 JoinHandle/shutdown；错误事件化；改写保留 body/headers/query；未命中透传 | `proxy/runtime.rs`、`proxy/handler.rs`、状态 UI | GPT-5 Codex | 端口冲突、启停、HTTP 命中/透传 E2E、请求语义断言 | 已确认 |
+| R8 | CertificateService 生成持久 CA，私钥 `0600`，DER SHA-256 指纹；提供路径、打开导入和刷新钥匙串信任状态；代理启动前展示 CA 诊断 | `certificate.rs`、Tauri opener/commands、证书 UI | GPT-5 Codex | 文件权限、复用/重建、信任检测、HTTPS CONNECT E2E | 已确认 |
+| R9 | 增加微信开发者工具接入向导和自检：监听、CA、代理入口流量、目标域名、最近错误；明确手工代理设置 | 接入面板、诊断 commands、使用文档 | GPT-5 Codex | 实机微信开发者工具 HTTP/HTTPS 验收清单 | 已确认 |
+| R10 | 代理为每个请求生成独立 correlation ID；事件包含 request_started/completed/failed；前端订阅 Tauri event 并维护有界列表 | `events.rs`、proxy handler、日志 store/UI | GPT-5 Codex | 并发请求关联测试、事件订阅测试、筛选/清空测试 | 已确认 |
+| R11 | `schemaVersion` + 显式 migration；运行状态启动时归一为 stopped；原子写入和备份恢复；参考项目 JSON 只导入支持字段 | `config.rs`、`migration.rs`、导入导出 UI | GPT-5 Codex | 各版本 fixture、损坏文件恢复、敏感字段排除测试 | 已确认 |
+| R13 | 删除 `ActiveTags` UI、前端回调和对应 command；规则匹配不再读取 `activeTags`，同步得到的 Tag 均参与匹配，仅由规则 `enabled` 控制拦截；兼容加载旧配置但忽略旧 `activeTags` 值 | `ApifoxSyncPanel.tsx`、`App.tsx`、`desktop.ts`、`commands.rs`、`lib.rs`、`proxy/mod.rs`、模型兼容逻辑 | GPT-5 Codex | 匹配回归测试、前端构建、源码约束、旧配置加载测试 | 已确认 |
+| R14 | 在 Profile 增加独立 `globalMockEnabled`；新增原子切换 command；代理匹配在 host/path 后、rule 前判断全局状态；规则区用单个 Switch 展示并切换，移除逐条循环批量更新；迁移缺失字段的现有 Profile 为 `true`，新建 Profile 为 `false` | `model.rs`、`state.rs`、`commands.rs`、`lib.rs`、`proxy/mod.rs`、`types.ts`、`desktop.ts`、`App.tsx`、`RuleTable.tsx`、`App.css` | GPT-5 Codex | 迁移默认值、全局关闭透传、逐接口状态保持、前端构建、HTTP/HTTPS E2E | 已确认 |
+| R15 | 将 Access/Mock Token 字段迁入 `ApifoxConnection` 并随 Profile JSON 持久化；移除 `keyring` 依赖和 `credentials.rs` 调用；同步请求传入非空值时覆盖配置，留空时复用已存值；代理从 Profile 配置读取并支持运行时热更新；前端初始化及 Profile 切换时回显 | `model.rs`、`commands.rs`、`proxy/mod.rs`、`state.rs`、`Cargo.toml`、`ApifoxSyncPanel.tsx`、`types.ts`、使用文档 | GPT-5 Codex | 配置重载、留空复用、覆盖更新、代理 Query、日志脱敏、无 Keychain API 源码断言、全量构建/E2E | 已确认 |
+| R16 | 使用 `url::Url` 结构化生成规则目标：先拼接 path，再合并 `apifoxToken`；同步后遍历所有 Apifox 来源规则刷新 Token 参数；代理改写在合并原请求 Query 后用当前配置 Token 覆盖同名参数；空 Mock Token 时不追加 | `apifox.rs`、`commands.rs`、`proxy/mod.rs`、规则测试和 E2E | GPT-5 Codex | 规则目标后缀、URL 编码、跨 Tag Merge 刷新、旧 Token 覆盖、日志脱敏、HTTP/HTTPS E2E | 已确认 |
+| R17 | `.log-stream` 使用固定 `height: 360px`、`overflow-y: auto`、稳定滚动条空间和滚动边界；section heading 保持列表之外；空态在固定视口内展示 | `App.css`、`RequestLogPanel.tsx`（仅必要时增加语义属性） | GPT-5 Codex | 前端构建、源码约束、桌面宽度与窄视口布局检查 | 已确认 |
+| R18 | 删除前端 `SyncStrategy`、策略状态和选择器，Apifox 请求契约不再接收 strategy，Rust 预览与同步统一执行 Replace：删除旧 Apifox 来源规则后写入本次 Tag 结果，Custom/Imported 规则不变；从 `x-run-in-apifox` 解析并规范化 Web 接口页，持久化到带默认空值的规则字段，在线项目缺失直链时仅按数字 API ID + 项目 ID生成兜底；规则路径使用 Tauri opener 打开系统默认浏览器；`.rule-table-wrap` 固定 `420px`、纵向滚动、表头 sticky，Request/Target 单元格设置列宽及 `overflow-wrap: anywhere` | `model.rs`、`apifox.rs`、`commands.rs`、`types.ts`、`ApifoxSyncPanel.tsx`、`RuleTable.tsx`、`App.css`、使用文档和测试 | GPT-5 Codex | Replace 预览/同步测试、自定义规则保留、直链规范化/兜底/无效链接测试、前端构建、源码约束、桌面与窄视口人工检查 | 已确认 |
+| R19 | 复核现有 `delete_rule` 的共享 snapshot 更新和持久化链路，将操作列扩宽并为两个图标保留稳定尺寸；新增 `clear_rules(profileId)` 原子命令，清空 rules/syncedTags/兼容 activeTags 后持久化，运行中的 handler 因共享 snapshot 立即读取新状态；RuleTable 增加应用内重置确认框并通过统一 `apply` 显示 Toast；标题左侧组合 `h2 + search`，右侧仅保留全局开关、添加和重置，删除 kicker | `commands.rs`、`lib.rs`、`desktop.ts`、`App.tsx`、`RuleTable.tsx`、`App.css`、测试和使用文档 | GPT-5 Codex | 单条删除/全量清空持久化测试、运行态匹配回归、确认框/Toast 源码检查、前端构建和桌面布局检查 | 已确认 |
+| R12 | 建立 Rust 单元/集成、前端测试和本地双 upstream E2E；更新 README/使用文档；构建并校验 arm64 app/dmg | tests、scripts、docs、Tauri bundle | GPT-5 Codex | `pnpm build`、`check:source`、`cargo test`、E2E、codesign、hdiutil | 已确认 |
+
+## 数据模型设计
+
+### 持久化配置
+
+```rust
+AppConfig {
+  schema_version,
+  active_profile_id,
+  profiles: Vec<ProjectProfile>,
+  tag_history,
+}
+
+ProjectProfile {
+  id,
+  name,
+  source_hosts: Vec<String>,
+  path_prefix: Option<String>,
+  proxy_port: u16,
+  apifox: ApifoxConfig,
+  synced_tags: Vec<String>,
+  active_tags: Vec<String>, // 仅兼容旧 schema，运行时忽略并在同步后镜像 synced_tags
+  global_mock_enabled: bool,
+  rules: Vec<ProxyRule>,
+}
+
+ApifoxConfig {
+  mode: Online | Local,
+  project_id: Option<String>,
+  local_openapi_url: Option<String>,
+  mock_prefix: String,
+  access_token: String,
+  mock_token: String,
+}
+
+ProxyRule {
+  id,
+  source: Apifox | Custom | Imported,
+  source_operation_id: Option<String>,
+  name,
+  method,
+  path_pattern,
+  match_mode,
+  target_base,
+  enabled,
+  tags: Vec<String>,
+  priority,
+}
+```
+
+### 运行时状态
+
+`ProxyStatus`、监听 socket、shutdown channel、JoinHandle、实时请求和瞬时错误不作为可信持久化状态。应用启动时一律从 `stopped` 开始，启动代理成功后由 ProxyService 发布状态事件。
+
+### Token 配置
+
+Access Token 与 Mock Token 作为 `ApifoxConfig` 字符串随 Profile 写入 `desktop-state.json`。表单切换 Profile 或重启后回显；输入非空新值时覆盖，留空时复用已存值。规则和配置可以显示 Token，但请求日志、诊断、Toast 和错误输出必须脱敏。
+
+## Tauri 契约设计
+
+### Commands
+
+| Command | 作用 |
+| --- | --- |
+| `get_app_snapshot` | 获取脱敏配置、派生证书状态和代理状态 |
+| `create_profile` / `update_profile` / `delete_profile` / `set_active_profile` | Profile 生命周期 |
+| `validate_apifox_connection` | 获取并校验 OpenAPI，返回摘要和可选 Tag，不落规则 |
+| `preview_apifox_sync` / `apply_apifox_sync` | 生成 diff 并按确认策略同步 |
+| `create_rule` / `update_rule` / `delete_rule` / `set_rule_enabled` | 规则管理 |
+| `set_global_mock_enabled` | 原子更新 Profile 级全局 Mock 门控，不改写逐接口状态 |
+| `generate_ca` / `get_ca_status` / `open_ca_certificate` / `regenerate_ca` | CA 生命周期和信任检测 |
+| `start_proxy` / `stop_proxy` / `diagnose_proxy` | 代理生命周期和接入诊断 |
+| `clear_request_logs` | 清空前端/后端有界日志缓存 |
+| `import_reference_config` / `export_safe_config` | 兼容导入与安全导出 |
+
+所有 command 使用结构化错误：`code`、`message`、`detail`、`recoverable`，禁止只返回不可分类字符串。
+
+### Events
+
+| Event | 载荷 |
+| --- | --- |
+| `proxy://status` | status、port、errorCode、message |
+| `proxy://request-started` | correlationId、time、method、脱敏 source、match decision |
+| `proxy://request-completed` | correlationId、destination、ruleId、statusCode、duration |
+| `proxy://request-failed` | correlationId、stage、safeError、duration |
+| `certificate://status` | generated、trusted、fingerprint、certificatePath |
+
+## Apifox 同步设计
+
+### 在线模式
+
+```http
+POST https://api.apifox.com/v1/projects/{projectId}/export-openapi?locale=zh-CN
+Authorization: Bearer <Access Token>
+X-Apifox-Api-Version: 2024-03-28
+Content-Type: application/json
+
+{
+  "scope": { "type": "ALL" },
+  "options": { "includeApifoxExtensionProperties": true },
+  "oasVersion": "3.1",
+  "exportFormat": "JSON"
+}
+```
+
+### 本地模式
+
+对用户配置的完整 URL 发 GET，设置合理连接/响应超时，只接受 HTTP 成功且包含 `openapi` 或 `swagger` 与 `paths` 的 JSON。
+
+### Tag 与同步语义
+
+- `availableTags`：本次 OpenAPI 文档解析结果，不直接持久化为生效范围。
+- `syncedTags`：用户选择并已同步进本地规则的数据范围。
+- 旧配置中的 `activeTags` 仅为兼容字段，运行时忽略；同步后镜像 `syncedTags`，后续 schema 升级可移除。
+- 同步使用稳定 ID：优先 `operationId` 或 Apifox extension API ID，缺失时使用 `METHOD + normalized path` 哈希。
+- 同步固定使用 Replace：删除全部旧 Apifox 来源规则后写入本次选中 Tag 的新规则，不保留旧 Apifox 规则的启停状态；Custom/Imported 规则不删除。
+- 同步前必须返回新增、更新、删除、保留和冲突数量，用户确认后才能应用。
+- Apifox Web 接口页优先取 `x-run-in-apifox` 并移除末尾 `-run`/`-link` 与旧 `/web/` 路径；缺失时仅使用在线项目 ID 与扩展字段中的数字 API ID构造 `https://app.apifox.com/project/{projectId}/apis/api-{apiId}`，无法可靠识别时不渲染链接。
+
+## 代理匹配与改写设计
+
+### 匹配顺序
+
+```text
+请求进入 loopback 代理
+  -> active Profile 存在
+  -> Host 精确匹配 source_hosts（忽略默认端口，域名小写规范化）
+  -> Path 满足可选 path_prefix
+  -> global_mock_enabled 为 true
+  -> Method 匹配
+  -> Rule enabled
+  -> 按 priority、exact/template/regex/contains 顺序选唯一规则
+```
+
+未通过任何条件均透传原目标，并记录明确的未命中阶段。规则冲突在保存/同步时预警，运行时仍使用确定性排序。
+
+### OpenAPI 模板路径
+
+`/users/{id}/orders/{orderId}` 编译为：
+
+```text
+^/users/[^/]+/orders/[^/]+/?$
+```
+
+静态片段必须正则转义，不允许把 OpenAPI 路径直接当作任意正则执行。
+
+### Mock URL 与 Query
+
+1. 以规则目标的 scheme/authority/path 为目标。
+2. 保留目标 URL 已有 Query。
+3. 合并原请求 Query；同名普通参数以原请求为准。
+4. 同步规则目标显式保存 `apifoxToken`；转发时用当前 Profile 的 Mock Token 覆盖目标或原请求中的旧值。
+5. 日志展示 URL 时移除 `apifoxToken` 和敏感参数。
+6. 更新 Host header，并移除连接级 hop-by-hop headers；method/body 和必要业务 headers 保持不变。
+
+## 证书与客户端接入设计
+
+- CA 首次按需生成到应用数据目录；证书 `0644`，私钥创建后强制 `0600`。
+- 指纹对 DER 证书计算 SHA-256，以冒号分隔大写十六进制展示。
+- `open_ca_certificate` 使用系统打开证书，让用户在钥匙串中显式导入；应用不静默获取管理员权限。
+- `get_ca_status` 使用 macOS Security Framework 或受控 `security` 查询证书是否存在且被信任，不能用固定布尔值。
+- 接入面板展示微信开发者工具需要填写的 host/port、当前监听、CA 信任和最近入口请求。
+- HTTPS 验收必须同时覆盖 `curl --proxy` 和微信开发者工具；若客户端启用 certificate pinning，返回明确诊断而不是伪装为规则问题。
+
+## 实时日志设计
+
+- 每个请求创建独立 `correlationId` 和 `Instant`，存入并发安全的 pending map；响应完成后按 ID 关联。
+- 后端只保留最多 500 条脱敏摘要，前端同样使用有界 store；默认不持久化 Body 和敏感 Headers。
+- 前端在主窗口挂载时订阅 events，在卸载时解除订阅；重新打开窗口时通过 snapshot 获取当前有界摘要。
+- 支持按 matched/passed/failed、Tag、ruleId、method 搜索筛选；详情展示匹配阶段和安全错误。
+
+## 配置迁移设计
+
+1. 新配置使用 `schemaVersion`，写入前生成临时文件并原子替换，保留最近一份 `.bak`。
+2. 识别当前无版本演示配置：若字段仍为内置演示 ID/域名且没有用户同步证据，则迁移为空项目，不把假规则继续带入。
+3. 对用户真实修改过的旧 Profile 做字段映射并要求首次打开确认源域名、路径前缀和凭据。
+4. 旧状态中的 `proxyStatus`、演示日志和 `trusted` 不作为新状态来源。
+5. 参考项目 JSON 仅导入可映射的 module/API 字段；Token、Cookie、权限点等不进入普通配置。
+
+## 前端工作台调整
+
+- 首屏是可工作的项目工作台，不展示演示日志；无项目时提供明确创建入口。
+- 项目设置使用真实表单；端口、域名和路径有即时校验。
+- Apifox 区域拆为“连接配置”和“Tag 同步”，只有验证连接成功后才能选择 Tag。
+- Tag 控件清晰区分“同步范围”和“当前生效范围”，生效切换使用 checkbox/segmented controls，不复用纯筛选 tabs。
+- 规则表的添加、编辑、批量启停、详情均实现；暂不实现的按钮移除。
+- 证书区显示路径、信任状态、打开/刷新/重建操作和风险确认。
+- 顶部代理按钮根据真实状态禁用冲突操作；启动失败保留可操作错误。
+
+## 分阶段实施与验证
+
+### 增量 1：配置基线
+
+- 建立新模型、ConfigStore、迁移和 Profile CRUD。
+- 验证：配置单测、空状态 UI、重启恢复；不启动代理。
+
+### 增量 2：Apifox 与凭据
+
+- 实现本地 Token 配置、在线/本地连接、Tag 获取、同步预览和稳定规则。
+- 验证：本地 mock Apifox 服务契约测试、Token 持久化/脱敏测试、真实 Apifox 人工验证。
+
+### 增量 3：规则与 HTTP 代理
+
+- 实现域名/前缀/模板匹配、逐接口开关、生命周期和 HTTP E2E。
+- 验证：本地 upstream + mock server，覆盖命中、跨域不命中、透传、query/body/header。
+
+### 增量 4：HTTPS 与实时事件
+
+- 完成 CA 安全、信任检测、CONNECT、请求 correlation 和 Tauri events。
+- 验证：本地 HTTPS upstream、`curl --proxy --cacert`、并发日志关联和 UI 实时刷新。
+
+### 增量 5：微信开发者工具与交付
+
+- 完成接入向导、诊断、真实微信开发者工具验收、文档和打包。
+- 验证：至少一个真实源域名的 GET 与 POST、动态路径、命中 Mock、未命中透传；生成并校验 arm64 DMG。
+
+## 测试矩阵
+
+| 层级 | 必测内容 |
+| --- | --- |
+| Rust 单元 | URL/host 规范化、模板编译、规则优先级、Query 合并、Token 脱敏、迁移、CA 权限 |
+| Rust 集成 | Apifox 在线请求契约、本地 OpenAPI、Token 配置重载、配置原子写入 |
+| Proxy E2E | HTTP/HTTPS、CONNECT、命中、透传、端口冲突、body/query/header、并发日志 |
+| 前端 | Profile 表单、连接错误、Tag 同步、规则操作、event reducer、证书状态 |
+| 桌面人工 | 首次启动、钥匙串信任、微信开发者工具代理、真实 Apifox Mock、重启恢复 |
+| 打包 | production build、arm64 架构、codesign verify、hdiutil verify、Applications 启动 |
+
+## 技术决策
+
+| 决策项 | 结论 | 原因 | 备选方案 |
+| --- | --- | --- | --- |
+| 网络拦截方式 | 继续使用 `hudsucker` loopback 显式代理 | 已有基础实现，支持 CONNECT 和动态 CA；符合微信开发者工具可配置代理场景 | VPN/透明代理权限和风险更高，不在本轮范围 |
+| Tag 语义 | Tag 只用于同步筛选和规则归类 | 用户不需要 Tag 层级的运行时开关，逐接口开关更直接 | 旧 `activeTags` 字段暂留作配置兼容但不参与匹配 |
+| Token 存储 | Profile JSON 字符串 | 用户明确接受本地明文风险，以避免系统授权弹窗并保留表单值 | Keychain 方案已由 R15 废弃 |
+| 前后端同步 | Commands 管理配置，Events 推送运行态 | 配置写操作需要明确结果，流量和状态需要实时推送 | 高频轮询延迟高且浪费资源 |
+| CA 信任 | 用户显式导入，应用检测状态 | 避免静默管理员操作，保留用户控制 | 自动 `sudo security add-trusted-cert` 权限和回滚风险高 |
+| 规则来源 | 稳定来源 ID + source 类型 | 支持安全刷新并保留自定义规则 | 数组序号 ID 会随 OpenAPI 顺序变化 |
+| 系统代理 | 不自动修改 | 微信开发者工具可显式配置，避免影响全机流量和异常退出残留 | 自动系统代理需单独设计恢复守护 |
+
+## 风险与回滚
+
+| 风险 | 控制措施 | 回滚方式 |
+| --- | --- | --- |
+| 配置迁移误删用户规则 | 迁移前备份、识别演示数据、展示迁移摘要 | 恢复 `.bak` 并降级读取旧 schema |
+| CA 重建导致客户端不信任 | 默认复用 CA，重建二次确认 | 重新导入旧备份 CA 或新 CA 并刷新信任 |
+| 代理错误影响真实请求 | host/path 双重范围、未命中透传、loopback 限制 | 停止代理并移除微信开发者工具代理配置 |
+| Token 泄露 | 请求日志和诊断结构化脱敏、禁止 Body/敏感头落盘 | 删除 Profile 配置并在服务端轮换 Token |
+| Apifox API 变更 | 请求契约集中封装、版本头、错误码 | 保留本地 OpenAPI URL 模式作为降级路径 |
+| 客户端证书固定 | 接入诊断明确识别 | 无法绕过；恢复真实请求透传并关闭代理 |
+
+## 注意事项
+
+- 实施前必须保留并识别当前用户工作树中的 `mise.toml`、`pnpm-workspace.yaml`，不得回退未知修改。
+- 不得把演示状态当作默认生产配置，不得用静态日志声称代理成功。
+- 不得在 CA 未信任或代理未监听时展示“功能正常”。
+- 不得手工拼接 URL 或正则；分别使用 URL parser 和转义后的规则编译器。
+- 不得在未完成 HTTP/HTTPS E2E 与微信开发者工具人工验证时产出“可用版”结论。
+- 每个增量遵循 Observe -> Plan -> Act -> Verify -> Reflect，并在验证失败后记录真实证据。
+
+## 编码规范
+
+- 所有新增或修改的 `.js`、`.ts`、`.tsx`、`.jsx`、`.mjs` 文件，格式化后单文件不得超过 500 个物理行；超过时按组件、Hook、纯函数或模块职责拆分。
+- 代码保持精简，禁止重复代码；可复用的渲染、数据转换或业务逻辑按合理边界抽离。
+- 禁止使用三元运算符；条件渲染优先采用 `renderXxx` 函数、哈希映射、`switch`、`if` 或提前返回。
+- 禁止反向引用和双向引用。组件、模块和依赖只能从内向外单向引入；通过提取共享下层模块、调整职责边界或依赖注入消除循环依赖与层级反向依赖。
+
+## 代码优化
+
+- 前端移除演示快照和所有无行为按钮，按项目、Apifox、证书、规则、日志和接入诊断拆分组件。
+- Rust 使用版本化模型、原子配置写入、稳定 operation ID 和结构化 URL 合并。
+- 代理测试直接启动 loopback proxy 与本地 upstream，不以纯匹配单测替代 HTTP/HTTPS 证据。
+
+## 实施记录
+
+| 日期 | 代码或方案变更 | 关联需求 | 使用模型 | 影响 |
+| --- | --- | --- | --- | --- |
+| 2026-08-27 | 创建 `main` 分支技术方案，完成参考项目与当前实现差距分析、架构设计、迁移和验证规划 | R1-R12 | GPT-5 Codex | 建立后续完整修复的权威方案；尚未修改实现 |
+| 2026-08-27 | 用户通过 `ac` 确认 R1-R12 | R1-R12 | GPT-5 Codex | 开始按五个增量实施 |
+| 2026-08-27 | 完成 schema v2、演示数据迁移、Profile CRUD、Keychain、Apifox 在线/本地同步、Tag diff/激活和规则管理 | R1-R6、R11 | GPT-5 Codex | 配置与同步工作流改为真实数据闭环 |
+| 2026-08-27 | 完成 loopback 生命周期、host-first 匹配、模板改写、Mock Token、CA 安全、信任检测和实时事件日志 | R3、R5-R10 | GPT-5 Codex | HTTP/HTTPS 请求可选择性 Mock 或透传 |
+| 2026-08-27 | 重构完整桌面工作台，新增微信开发者工具接入检查、使用与验收文档 | R1-R10、R12 | GPT-5 Codex | 移除旧 UI 原型与无行为入口 |
+| 2026-08-27 | 删除原生确认框；项目/规则删除改为应用内确认；Tag 同步改为验证连接、多选下拉、接口 method/path 预览、明确确认四阶段 | R1、R4、R6 | GPT-5 Codex | 修复安装包中点击删除/同步无反馈并对齐参考项目交互 |
+| 2026-08-27 | 新增应用内运行诊断控制台，记录 command 开始、成功、失败，支持复制和清空；修复包升级到 0.1.1 | R1-R10、R12 | GPT-5 Codex | 无需打开 WebView 控制台即可定位连接、同步、删除、证书和代理错误 |
+| 2026-08-27 | 修复 Merge 误删其他 Tag 规则和新 Tag 未激活；开放所有规则编辑/删除；验证即持久化连接配置；增加全局 Toast；版本升级 0.1.2 | R2-R7、R9-R10、R12 | GPT-5 Codex | 修复跨模块同步与运行态错位，并让所有表单操作有即时反馈 |
+| 2026-08-27 | 修复 Mock Token 热更新缺陷：代理运行时与请求处理器共享凭据槽，验证或同步保存 Keychain 后立即更新同一 Profile 的运行实例 | R3、R7 | GPT-5 Codex | 无需重启代理，后续命中请求会携带最新 `apifoxToken`；不改变凭据存储、安全边界或外部契约 |
+| 2026-08-27 | 提议移除运行时 Mock 范围整行；确认后同步移除 active Tag 匹配语义，以接口规则开关作为唯一运行时控制 | R5、R13 | GPT-5 Codex | 防止只隐藏 UI 后旧的 inactive Tag 在后台继续阻止拦截 |
+| 2026-08-27 | 用户通过 `ac` 确认 R13，开始移除 Tag 运行时激活 UI、命令和匹配条件 | R5、R13 | GPT-5 Codex | R5 被 R13 替代，Tag 只保留同步筛选与规则归类职责 |
+| 2026-08-27 | 完成 R13：移除运行时 Mock 范围整行、前后端 active Tag command 和代理匹配条件，旧字段仅作配置兼容 | R5、R13 | GPT-5 Codex | 所有同步规则直接受逐接口开关控制，不再存在隐藏的 Tag 阻断条件 |
+| 2026-08-27 | 对照参考项目 `isGlobalEnabled` 提议 R14：用独立全局 Switch 替代两个批量按钮，保留逐接口状态 | R6、R14 | GPT-5 Codex | 修正当前逐条批量更新造成的状态覆盖，等待确认 |
+| 2026-08-27 | 用户通过 `ac` 确认 R14，开始实现 Profile 级全局 Mock 门控与单 Switch 交互 | R6、R14 | GPT-5 Codex | 全局状态和逐接口状态独立持久化 |
+| 2026-08-27 | 完成 R14：用单一全局 Mock Switch 替换两个批量按钮，代理增加独立门控和 `global-switch` 诊断阶段；现有项目迁移开启，新项目默认关闭；版本升级 0.1.3 | R6、R12、R14 | GPT-5 Codex | 全局切换不再覆盖逐接口状态，交互与参考项目一致 |
+| 2026-08-27 | 定位 Keychain 拒绝导致无限加载：`get_snapshot` 启动时主动读取所有凭据，拒绝后 command 失败；前端 `snapshot=null` 分支不渲染错误。计划取消启动时 Keychain 探测，沿用持久化配置标记，并增加初始化失败/重试界面 | R3、R11 | GPT-5 Codex | 应用启动不再触发凭据访问；实际需要 Token 的操作仍由 macOS Keychain 授权保护 |
+| 2026-08-27 | 提议 R15：取消 Keychain，将 Access/Mock Token 作为普通 Profile 配置字符串持久化和回显，并保留日志脱敏 | R3、R15 | GPT-5 Codex | 完全消除钥匙串授权路径；明确接受应用数据 JSON 明文风险，等待确认 |
+| 2026-08-27 | 用户通过 `ac` 确认 R15，开始移除 Keychain 并迁移 Token 到 Profile 配置 | R3、R15 | GPT-5 Codex | R3 被 R15 替代；继续保持日志和代理目标展示脱敏 |
+| 2026-08-27 | 完成 R15 和初始化恢复：Token 改为 Profile JSON 持久化并回显，移除 `keyring` 与凭据模块；启动不再访问 Token 权限；初始化失败可显示原因并重试 | R3、R11、R15 | GPT-5 Codex | 消除 Token 钥匙串授权弹窗和拒绝后无限加载；19 项 Rust 测试通过 |
+| 2026-08-27 | 提议 R16：同步规则目标显式携带 `apifoxToken`，Token 更新时刷新全部 Apifox 规则并由运行时当前值兜底覆盖 | R15、R16 | GPT-5 Codex | 修复规则目标缺少鉴权后缀和旧 Token 残留，等待确认 |
+| 2026-08-27 | 用户通过 `ac` 确认 R16，开始实现结构化目标 URL 和 Token 刷新 | R15、R16 | GPT-5 Codex | Token 后缀成为规则数据的一部分，运行时仍保留覆盖兜底 |
+| 2026-08-27 | 提议 R17：请求记录列表固定 360px 并内部滚动 | R10、R17 | GPT-5 Codex | 防止实时日志无限撑高页面，等待确认 |
+| 2026-08-27 | 用户通过 `ac` 确认 R17，开始实现固定日志视口 | R10、R17 | GPT-5 Codex | 请求记录模块不再随日志数量无限增高 |
+| 2026-08-27 | 完成 R16：同步目标显式追加 URL 编码的 `apifoxToken`，同步刷新全部 Apifox 规则，运行时当前 Token 覆盖旧值 | R15、R16 | GPT-5 Codex | 修复 Mock 鉴权后缀缺失和 Token 更新残留；Custom/Imported 规则不变 |
+| 2026-08-27 | 完成 R17：请求记录视口固定 360px 并内部滚动；版本升级 0.1.5 | R10、R12、R17 | GPT-5 Codex | 实时日志不再无限撑高页面 |
+| 2026-08-27 | 提议 R18：同步固定为 Replace，规则表固定高度并让请求/目标换行，请求路径增加 Apifox Web 外链 | R4、R6、R18 | GPT-5 Codex | 移除无实际场景的策略选择，对齐参考项目跳转能力并控制规则表尺寸；等待确认 |
+| 2026-08-27 | 用户通过 `ac` 确认 R18，开始实现单一 Replace 契约与规则表交互 | R4、R6、R18 | GPT-5 Codex | 每次同步重建 Apifox 规则并重置其逐接口状态；Custom/Imported 规则不变 |
+| 2026-08-27 | 提议 R19：修复被窄列裁切的删除入口，增加清空当前 Profile 全部规则的重置操作，并重排标题与搜索框 | R6、R19 | GPT-5 Codex | 重置属于有确认提示的破坏性操作，保留连接与全局配置；等待确认 |
+| 2026-08-27 | 完成 R18：删除同步策略契约，固定 Replace；新增 Apifox Web 地址解析/持久化/系统浏览器跳转；规则表固定 420px、表头固定、请求和目标换行，操作列扩宽 | R4、R6、R18 | GPT-5 Codex | 同步交互收敛为单一路径，长 URL 不再撑宽列表，可从请求路径进入 Apifox 接口页；操作列不再裁切删除图标 |
+| 2026-08-27 | 用户通过 `ac` 确认 R19，开始实现规则重置命令和标题操作区 | R6、R19 | GPT-5 Codex | 重置范围固定为规则和 Tag，不改变连接、Token、Mock 前缀或全局开关 |
+| 2026-08-27 | 完成 R19：注册原子 `clear_rules` 命令和应用内确认框；搜索框移至标题旁，删除 `ROUTING RULES`，添加按钮右侧增加重置入口；操作列扩至 92px | R6、R12、R19 | GPT-5 Codex | 单条删除的两个操作图标完整可见；重置后运行态和持久化状态同时清空规则与 Tag；版本升级 0.1.6 |
+
+## 验证结果
+
+| 日期 | 验证项 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 2026-08-27 | Rust 单元与代理 E2E | 通过 | `cargo test`：12 passed；包含跨 Tag Merge 保留、无 Apifox 扩展字段 OpenAPI、目录 Tag 过滤、真实 HTTP 转发和 HTTPS CONNECT + 动态 CA + TLS upstream |
+| 2026-08-27 | 前端构建与源码约束 | 通过 | `pnpm build`、`pnpm run check:source` 通过，无三元表达式且 TS/TSX 单文件小于 500 行 |
+| 2026-08-27 | Rust 编译 | 通过 | `cargo check --manifest-path src-tauri/Cargo.toml` 通过 |
+| 2026-08-27 | Mock Token 运行时热更新 | 通过 | `cargo test --manifest-path src-tauri/Cargo.toml`：14 passed；新增同 Profile 热更新隔离与后续请求 Query 携带 Token 回归测试，HTTP/HTTPS E2E 均通过 |
+| 2026-08-27 | R13 Tag 运行时范围移除 | 通过 | `cargo test`：14 passed；`pnpm build`、`pnpm run check:source`、`cargo check`、`cargo fmt --check`、`git diff --check` 通过 |
+| 2026-08-27 | R14 全局 Mock Switch | 通过 | `cargo test`：17 passed；覆盖全局关闭透传且逐接口状态保持、旧项目迁移开启、新项目默认关闭；HTTP/HTTPS E2E 通过 |
+| 2026-08-27 | R15-R17 Token、同步目标与日志视口 | 通过 | `cargo test`：21 passed；`pnpm build`、`pnpm run check:source`、`cargo check`、`cargo fmt --check`、`git diff --check` 通过 |
+| 2026-08-27 | R18 固定 Replace、规则表与 Apifox Web 外链 | 通过 | `cargo test`：22 passed；包含 Replace 保留 Custom、链接规范化/兜底、真实 HTTP 与 HTTPS E2E；`pnpm build`、`pnpm run check:source`、`cargo check` 通过 |
+| 2026-08-27 | R19 规则删除、重置与标题布局 | 通过 | `cargo test`：23 passed；覆盖重置仅清空规则/Tag 且保留连接、Token、Mock 前缀和全局开关；HTTP/HTTPS E2E 通过；`pnpm build`、`pnpm run check:source`、`cargo check`、`cargo fmt --check`、`git diff --check` 通过 |
+| 2026-08-27 | 0.1.1 本地安装包 | 通过 | arm64；ad-hoc hardened runtime 签名通过 `codesign --verify --deep --strict`；DMG 通过 `hdiutil verify`；SHA-256 `c02919475f4b10e788419906455b2cc670a2fe330d3285d9c458dd96041f1c1f` |
+| 2026-08-27 | 0.1.2 本地安装包 | 通过 | arm64；ad-hoc hardened runtime 签名通过；DMG 通过 `hdiutil verify`；SHA-256 `a04510ec4cd141342b8df3be069af515abe4e2f3f73f619558f53125c2c11387` |
+| 2026-08-27 | 0.1.3 本地安装包 | 通过 | arm64，包内版本 0.1.3；ad-hoc 签名通过 `codesign --verify --deep --strict`；DMG 通过 `hdiutil verify`；SHA-256 `ec223284932894b56a47bbb8de016b095aa018632ed0f7428a4d102a69f22aaf` |
+| 2026-08-27 | 0.1.5 本地安装包 | 通过 | arm64，包内版本 0.1.5；ad-hoc 签名通过 `codesign --verify --deep --strict`；DMG 通过 `hdiutil verify`；SHA-256 `6fd8db567ef767958490691f3926497a6843ac099d9c6874dfe090ee0cc62d59` |
+| 2026-08-27 | 0.1.6 本地安装包 | 通过 | arm64，包内版本 0.1.6；ad-hoc 签名通过 `codesign --verify --deep --strict`；DMG 通过 `hdiutil verify`；SHA-256 `79663b903ad5b7b9f9a713859bef5f70e0384fef1d8325e8e0c7589ca2b73999` |
+| 2026-08-27 | 微信开发者工具真实项目人工验收 | 待用户执行 | 需要用户的真实源域名、Apifox 项目、Token 和微信开发者工具环境；按 `main-使用与验收文档.md` 验收 |

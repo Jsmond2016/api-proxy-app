@@ -1,16 +1,22 @@
-use std::fs;
-use std::path::PathBuf;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+
+#[cfg(unix)]
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 use hudsucker::rcgen::{
     BasicConstraints, CertificateParams, DistinguishedName, DnType, IsCa, KeyPair, KeyUsagePurpose,
 };
+use hudsucker::rustls::pki_types::{pem::PemObject, CertificateDer};
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use tokio::sync::oneshot;
 
 use crate::model::{
-    ApifoxConnection, CertificateStatus, DesktopSnapshot, ProjectProfile, ProxyRule, ProxyStatus,
-    RequestLog,
+    ApifoxConnection, ApifoxMode, CertificateStatus, DesktopSnapshot, MatchMode, ProjectProfile,
+    ProxyRule, ProxyStatus, RuleSource, CURRENT_SCHEMA_VERSION,
 };
 
 pub struct AppState {
@@ -22,12 +28,29 @@ pub struct AppState {
 
 pub struct ProxyRuntime {
     pub shutdown: oneshot::Sender<()>,
+    pub profile_id: String,
+    pub mock_token: Arc<Mutex<Option<String>>>,
+}
+
+impl ProxyRuntime {
+    pub fn update_mock_token(&self, profile_id: &str, token: &str) -> Result<bool, String> {
+        if self.profile_id != profile_id {
+            return Ok(false);
+        }
+        let mut current = self
+            .mock_token
+            .lock()
+            .map_err(|_| "proxy credential state is unavailable".to_string())?;
+        *current = Some(token.to_string());
+        Ok(true)
+    }
 }
 
 pub struct CertificateMaterial {
     pub certificate_pem: String,
     pub private_key_pem: String,
     pub fingerprint: String,
+    pub certificate_path: PathBuf,
 }
 
 impl AppState {
@@ -35,50 +58,109 @@ impl AppState {
         fs::create_dir_all(&data_directory)?;
         let storage_path = data_directory.join("desktop-state.json");
         let certificate_directory = data_directory.join("certificates");
-        let snapshot = load_snapshot(&storage_path);
+        let mut snapshot = load_snapshot(&storage_path);
+        snapshot.schema_version = CURRENT_SCHEMA_VERSION;
+        snapshot.proxy_status = ProxyStatus::Stopped;
+        snapshot.logs.clear();
+        snapshot.certificate = certificate_status(&certificate_directory);
 
-        Ok(Self {
+        let state = Self {
             snapshot: Arc::new(Mutex::new(snapshot)),
             proxy_runtime: Arc::new(Mutex::new(None)),
             certificate_directory,
             storage_path,
-        })
+        };
+        let snapshot = state
+            .snapshot
+            .lock()
+            .map_err(|_| "desktop state is unavailable")?;
+        state.persist(&snapshot)?;
+        drop(snapshot);
+        Ok(state)
     }
 
     pub fn persist(&self, snapshot: &DesktopSnapshot) -> Result<(), String> {
-        let serialized = serde_json::to_vec_pretty(snapshot)
+        let mut persisted = snapshot.clone();
+        persisted.schema_version = CURRENT_SCHEMA_VERSION;
+        persisted.proxy_status = ProxyStatus::Stopped;
+        persisted.logs.clear();
+        let serialized = serde_json::to_vec_pretty(&persisted)
             .map_err(|error| format!("failed to serialize desktop state: {error}"))?;
         let temporary_path = self.storage_path.with_extension("json.tmp");
+        let backup_path = self.storage_path.with_extension("json.bak");
 
         fs::write(&temporary_path, serialized)
             .map_err(|error| format!("failed to write desktop state: {error}"))?;
+        if self.storage_path.exists() {
+            let _ = fs::copy(&self.storage_path, &backup_path);
+        }
         fs::rename(&temporary_path, &self.storage_path)
             .map_err(|error| format!("failed to finalize desktop state: {error}"))?;
-
         Ok(())
+    }
+
+    pub fn update_runtime_mock_token(&self, profile_id: &str, token: &str) -> Result<bool, String> {
+        let runtime = self
+            .proxy_runtime
+            .lock()
+            .map_err(|_| "proxy runtime is unavailable".to_string())?;
+        let Some(runtime) = runtime.as_ref() else {
+            return Ok(false);
+        };
+        runtime.update_mock_token(profile_id, token)
     }
 
     pub fn certificate_material(&self) -> Result<CertificateMaterial, String> {
         fs::create_dir_all(&self.certificate_directory)
             .map_err(|error| format!("failed to create certificate directory: {error}"))?;
-        let certificate_path = self.certificate_directory.join("apifox-proxy-ca.pem");
-        let key_path = self.certificate_directory.join("apifox-proxy-ca-key.pem");
+        let certificate_path = self.certificate_path();
+        let key_path = self.certificate_key_path();
 
         if certificate_path.exists() && key_path.exists() {
+            secure_private_key(&key_path)?;
             return read_certificate_material(certificate_path, key_path);
         }
 
-        let material = create_certificate_material()?;
+        let material = create_certificate_material(certificate_path.clone())?;
         fs::write(&certificate_path, &material.certificate_pem)
             .map_err(|error| format!("failed to write certificate: {error}"))?;
-        fs::write(&key_path, &material.private_key_pem)
-            .map_err(|error| format!("failed to write certificate key: {error}"))?;
-
+        write_private_key(&key_path, &material.private_key_pem)?;
         Ok(material)
+    }
+
+    pub fn certificate_path(&self) -> PathBuf {
+        self.certificate_directory.join("apifox-proxy-ca.pem")
+    }
+
+    pub fn certificate_key_path(&self) -> PathBuf {
+        self.certificate_directory.join("apifox-proxy-ca-key.pem")
     }
 }
 
-fn create_certificate_material() -> Result<CertificateMaterial, String> {
+fn write_private_key(path: &Path, content: &str) -> Result<(), String> {
+    let mut options = OpenOptions::new();
+    options.create(true).truncate(true).write(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+    let mut file = options
+        .open(path)
+        .map_err(|error| format!("failed to create certificate key: {error}"))?;
+    file.write_all(content.as_bytes())
+        .map_err(|error| format!("failed to write certificate key: {error}"))?;
+    secure_private_key(path)
+}
+
+fn secure_private_key(path: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        let permissions = fs::Permissions::from_mode(0o600);
+        fs::set_permissions(path, permissions)
+            .map_err(|error| format!("failed to secure certificate key: {error}"))?;
+    }
+    Ok(())
+}
+
+fn create_certificate_material(certificate_path: PathBuf) -> Result<CertificateMaterial, String> {
     let mut params = CertificateParams::default();
     params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
     params.key_usages = vec![
@@ -101,12 +183,13 @@ fn create_certificate_material() -> Result<CertificateMaterial, String> {
         .map_err(|error| format!("failed to create CA certificate: {error}"))?;
     let certificate_pem = certificate.pem();
     let private_key_pem = key_pair.serialize_pem();
-    let fingerprint = calculate_fingerprint(certificate_pem.as_bytes());
+    let fingerprint = calculate_fingerprint(certificate.der().as_ref());
 
     Ok(CertificateMaterial {
         certificate_pem,
         private_key_pem,
         fingerprint,
+        certificate_path,
     })
 }
 
@@ -114,230 +197,266 @@ fn read_certificate_material(
     certificate_path: PathBuf,
     key_path: PathBuf,
 ) -> Result<CertificateMaterial, String> {
-    let certificate_pem = fs::read_to_string(certificate_path)
+    let certificate_pem = fs::read_to_string(&certificate_path)
         .map_err(|error| format!("failed to read certificate: {error}"))?;
     let private_key_pem = fs::read_to_string(key_path)
         .map_err(|error| format!("failed to read certificate key: {error}"))?;
-    let fingerprint = calculate_fingerprint(certificate_pem.as_bytes());
+    let fingerprint = fingerprint_from_pem(&certificate_pem)?;
 
     Ok(CertificateMaterial {
         certificate_pem,
         private_key_pem,
         fingerprint,
+        certificate_path,
     })
 }
 
 fn calculate_fingerprint(certificate: &[u8]) -> String {
     let digest = Sha256::digest(certificate);
-    let chunks = digest.chunks(2);
-    let mut values = Vec::new();
-
-    for chunk in chunks {
-        values.push(format!("{:02X}{:02X}", chunk[0], chunk[1]));
-    }
-
-    values.join(":")
+    digest
+        .iter()
+        .map(|value| format!("{value:02X}"))
+        .collect::<Vec<_>>()
+        .join(":")
 }
 
-fn load_snapshot(storage_path: &PathBuf) -> DesktopSnapshot {
-    let content = fs::read_to_string(storage_path);
+fn fingerprint_from_pem(certificate: &str) -> Result<String, String> {
+    let der = CertificateDer::from_pem_slice(certificate.as_bytes())
+        .map_err(|error| format!("failed to parse CA certificate: {error}"))?;
+    Ok(calculate_fingerprint(der.as_ref()))
+}
 
-    if let Ok(serialized) = content {
-        if let Ok(snapshot) = serde_json::from_str::<DesktopSnapshot>(&serialized) {
-            return snapshot;
+fn certificate_status(directory: &Path) -> CertificateStatus {
+    let certificate_path = directory.join("apifox-proxy-ca.pem");
+    if !certificate_path.exists() {
+        return CertificateStatus::default();
+    }
+    let content = fs::read_to_string(&certificate_path).unwrap_or_default();
+    CertificateStatus {
+        generated: true,
+        trusted: false,
+        fingerprint: fingerprint_from_pem(&content).unwrap_or_default(),
+        certificate_path: certificate_path.to_string_lossy().to_string(),
+    }
+}
+
+fn load_snapshot(storage_path: &Path) -> DesktopSnapshot {
+    let Ok(serialized) = fs::read_to_string(storage_path) else {
+        return DesktopSnapshot::default();
+    };
+    if let Ok(snapshot) = serde_json::from_str::<DesktopSnapshot>(&serialized) {
+        return normalize_snapshot(snapshot);
+    }
+    migrate_legacy_snapshot(&serialized).unwrap_or_default()
+}
+
+fn normalize_snapshot(mut snapshot: DesktopSnapshot) -> DesktopSnapshot {
+    snapshot.schema_version = CURRENT_SCHEMA_VERSION;
+    if let Some(active_id) = snapshot.active_profile_id.as_ref() {
+        if !snapshot
+            .profiles
+            .iter()
+            .any(|profile| &profile.id == active_id)
+        {
+            snapshot.active_profile_id =
+                snapshot.profiles.first().map(|profile| profile.id.clone());
         }
     }
-
-    default_snapshot()
+    snapshot
 }
 
-fn default_snapshot() -> DesktopSnapshot {
-    DesktopSnapshot {
-        active_profile_id: "wx-retail".to_string(),
-        proxy_status: ProxyStatus::Stopped,
-        certificate: CertificateStatus {
-            generated: false,
-            trusted: false,
-            fingerprint: "Not generated".to_string(),
-        },
-        profiles: vec![retail_profile(), member_profile()],
-        logs: vec![
-            request_log(
-                "log-1",
-                "10:42:16.310",
-                "GET",
-                "api.dev.acme.test/v1/products?page=1",
-                "m1.apifoxmock.com/m1/981245-0-default/v1/products?page=1",
-                "商品列表",
-                "matched",
-                200,
-                184,
-            ),
-            request_log(
-                "log-2",
-                "10:41:58.905",
-                "POST",
-                "api.dev.acme.test/v1/orders",
-                "m1.apifoxmock.com/m1/981245-0-default/v1/orders",
-                "创建订单",
-                "matched",
-                201,
-                267,
-            ),
-            request_log(
-                "log-3",
-                "10:40:11.440",
-                "GET",
-                "api.dev.acme.test/v1/notice",
-                "api.dev.acme.test/v1/notice",
-                "未命中",
-                "passed",
-                200,
-                96,
-            ),
-        ],
-    }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LegacySnapshot {
+    profiles: Vec<LegacyProfile>,
+    active_profile_id: String,
 }
 
-fn retail_profile() -> ProjectProfile {
-    ProjectProfile {
-        id: "wx-retail".to_string(),
-        name: "零售小程序".to_string(),
-        domain: "api.dev.acme.test".to_string(),
-        port: 8899,
-        apifox: ApifoxConnection {
-            mode: "online".to_string(),
-            source: "Project #981245".to_string(),
-            mock_prefix: "https://m1.apifoxmock.com/m1/981245-0-default".to_string(),
-            selected_tags: vec!["商品".to_string(), "订单".to_string()],
-        },
-        rules: vec![
-            proxy_rule(
-                "product-list",
-                "商品列表",
-                "GET",
-                "/v1/products",
-                "exact",
-                "https://m1.apifoxmock.com/m1/981245-0-default/v1/products",
-                true,
-                "商品",
-            ),
-            proxy_rule(
-                "order-create",
-                "创建订单",
-                "POST",
-                "/v1/orders",
-                "exact",
-                "https://m1.apifoxmock.com/m1/981245-0-default/v1/orders",
-                true,
-                "订单",
-            ),
-            proxy_rule(
-                "coupon-query",
-                "优惠券查询",
-                "GET",
-                "/v1/coupons",
-                "contains",
-                "https://m1.apifoxmock.com/m1/981245-0-default/v1/coupons",
-                false,
-                "营销",
-            ),
-        ],
-    }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LegacyProfile {
+    id: String,
+    name: String,
+    domain: String,
+    port: u16,
+    apifox: LegacyApifox,
+    rules: Vec<LegacyRule>,
 }
 
-fn member_profile() -> ProjectProfile {
-    ProjectProfile {
-        id: "wx-member".to_string(),
-        name: "会员中心".to_string(),
-        domain: "member.dev.acme.test".to_string(),
-        port: 8899,
-        apifox: ApifoxConnection {
-            mode: "local".to_string(),
-            source: "http://127.0.0.1:4523/export/openapi.json".to_string(),
-            mock_prefix: "http://127.0.0.1:4523/m1/77215-0-default".to_string(),
-            selected_tags: vec!["会员".to_string()],
-        },
-        rules: Vec::new(),
-    }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LegacyApifox {
+    mode: String,
+    source: String,
+    mock_prefix: String,
+    selected_tags: Vec<String>,
 }
 
-fn proxy_rule(
-    id: &str,
-    name: &str,
-    method: &str,
-    path: &str,
-    match_mode: &str,
-    target: &str,
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LegacyRule {
+    id: String,
+    name: String,
+    method: String,
+    path: String,
+    match_mode: String,
+    target: String,
     enabled: bool,
-    tag: &str,
-) -> ProxyRule {
-    ProxyRule {
-        id: id.to_string(),
-        name: name.to_string(),
-        method: method.to_string(),
-        path: path.to_string(),
-        match_mode: match_mode.to_string(),
-        target: target.to_string(),
-        enabled,
-        tag: tag.to_string(),
+    tag: String,
+}
+
+fn migrate_legacy_snapshot(serialized: &str) -> Option<DesktopSnapshot> {
+    let legacy = serde_json::from_str::<LegacySnapshot>(serialized).ok()?;
+    if is_untouched_demo(&legacy) {
+        return Some(DesktopSnapshot::default());
+    }
+    let profiles = legacy
+        .profiles
+        .into_iter()
+        .map(migrate_legacy_profile)
+        .collect::<Vec<_>>();
+    let active_profile_id = profiles
+        .iter()
+        .find(|profile| profile.id == legacy.active_profile_id)
+        .map(|profile| profile.id.clone())
+        .or_else(|| profiles.first().map(|profile| profile.id.clone()));
+    Some(DesktopSnapshot {
+        schema_version: CURRENT_SCHEMA_VERSION,
+        profiles,
+        active_profile_id,
+        ..DesktopSnapshot::default()
+    })
+}
+
+fn is_untouched_demo(snapshot: &LegacySnapshot) -> bool {
+    snapshot.profiles.iter().all(|profile| {
+        let known_id = profile.id == "wx-retail" || profile.id == "wx-member";
+        let known_source = profile.apifox.source == "Project #981245"
+            || profile.apifox.source == "http://127.0.0.1:4523/export/openapi.json";
+        known_id && known_source
+    })
+}
+
+fn migrate_legacy_profile(profile: LegacyProfile) -> ProjectProfile {
+    let mode = if profile.apifox.mode == "local" {
+        ApifoxMode::Local
+    } else {
+        ApifoxMode::Online
+    };
+    let (project_id, local_openapi_url) = match mode {
+        ApifoxMode::Online => (profile.apifox.source, String::new()),
+        ApifoxMode::Local => (String::new(), profile.apifox.source),
+    };
+    let rules = profile.rules.into_iter().map(migrate_legacy_rule).collect();
+    ProjectProfile {
+        id: profile.id,
+        name: profile.name,
+        source_hosts: vec![profile.domain],
+        path_prefix: String::new(),
+        port: profile.port,
+        apifox: ApifoxConnection {
+            mode,
+            project_id,
+            local_openapi_url,
+            mock_prefix: profile.apifox.mock_prefix,
+            ..ApifoxConnection::default()
+        },
+        synced_tags: profile.apifox.selected_tags.clone(),
+        active_tags: profile.apifox.selected_tags,
+        global_mock_enabled: true,
+        rules,
     }
 }
 
-fn request_log(
-    id: &str,
-    created_at: &str,
-    method: &str,
-    source: &str,
-    destination: &str,
-    rule_name: &str,
-    status: &str,
-    response_code: u16,
-    duration: u16,
-) -> RequestLog {
-    RequestLog {
-        id: id.to_string(),
-        created_at: created_at.to_string(),
-        method: method.to_string(),
-        source: source.to_string(),
-        destination: destination.to_string(),
-        rule_name: rule_name.to_string(),
-        status: status.to_string(),
-        response_code,
-        duration,
+fn migrate_legacy_rule(rule: LegacyRule) -> ProxyRule {
+    let match_mode = match rule.match_mode.as_str() {
+        "contains" => MatchMode::Contains,
+        "regex" => MatchMode::Regex,
+        _ => MatchMode::Exact,
+    };
+    ProxyRule {
+        id: rule.id,
+        source: RuleSource::Imported,
+        source_operation_id: String::new(),
+        apifox_web_url: String::new(),
+        name: rule.name,
+        method: rule.method,
+        path: rule.path,
+        match_mode,
+        target: rule.target,
+        enabled: rule.enabled,
+        tags: vec![rule.tag],
+        priority: 100,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::sync::{Arc, Mutex};
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use super::AppState;
+    use super::{AppState, DesktopSnapshot, ProxyRuntime};
+    use tokio::sync::oneshot;
 
-    #[test]
-    fn persists_desktop_snapshot() {
+    fn temporary_directory(name: &str) -> std::path::PathBuf {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system clock should be valid")
             .as_nanos();
-        let directory = std::env::temp_dir().join(format!("apifox-proxy-state-{timestamp}"));
+        std::env::temp_dir().join(format!("{name}-{timestamp}"))
+    }
 
+    #[test]
+    fn starts_without_demo_profiles() {
+        let directory = temporary_directory("apifox-proxy-empty");
+        let state = AppState::load(directory.clone()).expect("state should initialize");
+        let snapshot = state.snapshot.lock().expect("state should unlock");
+        assert!(snapshot.profiles.is_empty());
+        assert!(snapshot.logs.is_empty());
+        drop(snapshot);
+        fs::remove_dir_all(directory).expect("temporary state should be removed");
+    }
+
+    #[test]
+    fn persists_and_normalizes_runtime_state() {
+        let directory = temporary_directory("apifox-proxy-state");
         {
             let state = AppState::load(directory.clone()).expect("state should initialize");
-            let mut snapshot = state.snapshot.lock().expect("state should unlock");
-            snapshot.active_profile_id = "wx-member".to_string();
+            let snapshot = DesktopSnapshot::default();
             state.persist(&snapshot).expect("state should persist");
         }
-
         let reloaded = AppState::load(directory.clone()).expect("state should reload");
-        let snapshot = reloaded
-            .snapshot
-            .lock()
-            .expect("reloaded state should unlock");
-
-        assert_eq!(snapshot.active_profile_id, "wx-member");
+        let snapshot = reloaded.snapshot.lock().expect("state should unlock");
+        assert!(snapshot.profiles.is_empty());
+        assert!(snapshot.logs.is_empty());
         drop(snapshot);
+        fs::remove_dir_all(directory).expect("temporary state should be removed");
+    }
+
+    #[test]
+    fn updates_mock_token_for_running_profile_only() {
+        let directory = temporary_directory("apifox-proxy-runtime-token");
+        let state = AppState::load(directory.clone()).expect("state should initialize");
+        let (shutdown, _receiver) = oneshot::channel();
+        let mock_token = Arc::new(Mutex::new(None));
+        *state.proxy_runtime.lock().expect("runtime should unlock") = Some(ProxyRuntime {
+            shutdown,
+            profile_id: "profile-a".to_string(),
+            mock_token: Arc::clone(&mock_token),
+        });
+
+        assert!(!state
+            .update_runtime_mock_token("profile-b", "wrong-token")
+            .expect("other profile update should be ignored"));
+        assert!(state
+            .update_runtime_mock_token("profile-a", "latest-token")
+            .expect("active profile update should succeed"));
+        assert_eq!(
+            mock_token.lock().expect("token should unlock").as_deref(),
+            Some("latest-token")
+        );
+
         fs::remove_dir_all(directory).expect("temporary state should be removed");
     }
 }

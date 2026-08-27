@@ -1,101 +1,213 @@
+import { AlertCircle, Monitor, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { CertificatePanel } from "./components/CertificatePanel";
 import { ApifoxSyncPanel } from "./components/ApifoxSyncPanel";
+import { CertificatePanel } from "./components/CertificatePanel";
+import { ConnectionGuide } from "./components/ConnectionGuide";
+import { DiagnosticPanel } from "./components/DiagnosticPanel";
 import { ProjectSidebar } from "./components/ProjectSidebar";
 import { ProxyHeader } from "./components/ProxyHeader";
 import { RequestLogPanel } from "./components/RequestLogPanel";
 import { RuleTable } from "./components/RuleTable";
-import {
-  changeActiveProfile,
-  changeRuleState,
-  generateCertificate,
-  getDesktopSnapshot,
-  startProxy,
-  stopProxy,
-  syncOpenApi,
-} from "./lib/desktop";
-import type { DesktopSnapshot, OpenApiSyncInput } from "./types";
+import { ToastViewport } from "./components/ToastViewport";
+import * as desktop from "./lib/desktop";
+import type { ApifoxRequest, DesktopSnapshot, DiagnosticEntry, RequestLog, RuleInput, ToastMessage } from "./types";
 import "./App.css";
 
 function App() {
   const [snapshot, setSnapshot] = useState<DesktopSnapshot | null>(null);
+  const [initializing, setInitializing] = useState(true);
+  const [error, setError] = useState("");
+  const [diagnostics, setDiagnostics] = useState<DiagnosticEntry[]>([]);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   useEffect(() => {
+    let unsubscribe: () => void = () => undefined;
     void loadSnapshot();
+    void desktop.subscribeProxyEvents(setSnapshot, mergeRequestLog).then((stop) => { unsubscribe = stop; }).catch((reason) => { showError(reason); recordDiagnostic("error", "事件订阅", errorMessage(reason)); });
+    return () => unsubscribe();
   }, []);
 
-  const activeProfile = useMemo(() => {
-    if (!snapshot) {
-      return null;
+  async function loadSnapshot() {
+    setInitializing(true);
+    setError("");
+    try {
+      setSnapshot(await desktop.getDesktopSnapshot());
+      recordDiagnostic("success", "应用启动", "本地配置读取成功");
+    } catch (reason) {
+      showError(reason);
+      recordDiagnostic("error", "应用启动", errorMessage(reason));
+    } finally {
+      setInitializing(false);
     }
+  }
 
-    return snapshot.profiles.find((profile) => profile.id === snapshot.activeProfileId) ?? null;
+  const activeProfile = useMemo(() => {
+    if (!snapshot || !snapshot.activeProfileId) return null;
+    return snapshot.profiles.find((profile) => profile.id === snapshot.activeProfileId) || null;
   }, [snapshot]);
 
-  async function loadSnapshot() {
-    const nextSnapshot = await getDesktopSnapshot();
-    setSnapshot(nextSnapshot);
+  function showError(reason: unknown) {
+    setError(errorMessage(reason));
   }
 
-  async function handleProfileChange(profileId: string) {
-    const nextSnapshot = await changeActiveProfile(profileId);
-    setSnapshot(nextSnapshot);
+  function recordDiagnostic(level: DiagnosticEntry["level"], action: string, message: string) {
+    const entry: DiagnosticEntry = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      createdAt: new Date().toLocaleTimeString("zh-CN", { hour12: false }),
+      level,
+      action,
+      message,
+    };
+    setDiagnostics((current) => [entry, ...current].slice(0, 100));
   }
 
-  async function handleProxyStart() {
-    const nextSnapshot = await startProxy();
-    setSnapshot(nextSnapshot);
+  function notify(level: ToastMessage["level"], title: string, message: string) {
+    const toast: ToastMessage = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      level,
+      title,
+      message,
+    };
+    setToasts((current) => [toast, ...current].slice(0, 4));
   }
 
-  async function handleProxyStop() {
-    const nextSnapshot = await stopProxy();
-    setSnapshot(nextSnapshot);
+  function dismissToast(id: string) {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
   }
 
-  async function handleRuleToggle(ruleId: string, enabled: boolean) {
-    const nextSnapshot = await changeRuleState(ruleId, enabled);
-    setSnapshot(nextSnapshot);
+  function mergeRequestLog(log: RequestLog) {
+    setSnapshot((current) => {
+      if (!current) return current;
+      const logs = [log, ...current.logs.filter((item) => item.id !== log.id)].slice(0, 500);
+      return { ...current, logs };
+    });
   }
 
-  async function handleCertificateGeneration() {
-    const nextSnapshot = await generateCertificate();
-    setSnapshot(nextSnapshot);
+  async function apply(action: Promise<DesktopSnapshot>, label: string) {
+    setError("");
+    recordDiagnostic("info", label, "操作已开始");
+    try {
+      setSnapshot(await action);
+      recordDiagnostic("success", label, "操作成功");
+      notify("success", label, "操作成功");
+    } catch (reason) {
+      showError(reason);
+      recordDiagnostic("error", label, errorMessage(reason));
+      notify("error", label, errorMessage(reason));
+      throw reason;
+    }
   }
 
-  async function handleOpenApiSync(input: OpenApiSyncInput) {
-    const nextSnapshot = await syncOpenApi(input);
-    setSnapshot(nextSnapshot);
+  async function validateApifox(request: ApifoxRequest) {
+    setError("");
+    recordDiagnostic("info", "Apifox 连接/接口解析", "请求已开始");
+    try {
+      const preview = await desktop.validateApifox(request);
+      recordDiagnostic("success", "Apifox 连接/接口解析", `成功：${preview.selectedOperationCount} 个接口，${preview.availableTags.length} 个 Tag`);
+      notify("success", "Apifox 连接成功", `发现 ${preview.availableTags.length} 个 Tag、${preview.operationCount} 个接口`);
+      return preview;
+    } catch (reason) {
+      showError(reason);
+      recordDiagnostic("error", "Apifox 连接/接口解析", errorMessage(reason));
+      notify("error", "Apifox 连接失败", errorMessage(reason));
+      throw reason;
+    }
   }
 
-  if (!snapshot || !activeProfile) {
-    return <main className="app-loading">正在读取本地联调配置...</main>;
+  async function execute(action: Promise<unknown>, label: string) {
+    setError("");
+    recordDiagnostic("info", label, "操作已开始");
+    try {
+      await action;
+      recordDiagnostic("success", label, "操作成功");
+      notify("success", label, "操作成功");
+    } catch (reason) {
+      showError(reason);
+      recordDiagnostic("error", label, errorMessage(reason));
+      notify("error", label, errorMessage(reason));
+      throw reason;
+    }
   }
+
+  if (!snapshot) return <InitializationState busy={initializing} error={error} onRetry={loadSnapshot} />;
 
   return (
     <main className="app-shell">
+      <ToastViewport onDismiss={dismissToast} toasts={toasts} />
       <ProjectSidebar
         activeProfileId={snapshot.activeProfileId}
-        onSelect={handleProfileChange}
+        disabled={snapshot.proxyStatus === "running"}
         profiles={snapshot.profiles}
+        onCreate={(input) => apply(desktop.createProfile(input), "创建项目")}
+        onDelete={(id) => apply(desktop.deleteProfile(id), "删除项目")}
+        onSelect={(id) => apply(desktop.setActiveProfile(id), "切换项目")}
+        onUpdate={(input) => apply(desktop.updateProfile(input), "更新项目")}
       />
       <section className="workspace">
-        <ProxyHeader
-          onStart={handleProxyStart}
-          onStop={handleProxyStop}
-          profile={activeProfile}
-          status={snapshot.proxyStatus}
+        <RuntimeNotice />
+        <ErrorBanner error={error} onClose={() => setError("")} />
+        <Workspace
+          activeProfile={activeProfile}
+          snapshot={snapshot}
+          apply={apply}
+          execute={execute}
+          validateApifox={validateApifox}
         />
-
-        <div className="workspace-grid">
-          <CertificatePanel certificate={snapshot.certificate} onGenerate={handleCertificateGeneration} />
-          <ApifoxSyncPanel onSync={handleOpenApiSync} profile={activeProfile} />
-        </div>
-
-        <RuleTable onToggle={handleRuleToggle} rules={activeProfile.rules} />
-        <RequestLogPanel logs={snapshot.logs} />
+        <DiagnosticPanel entries={diagnostics} onClear={() => setDiagnostics([])} snapshot={snapshot} />
       </section>
     </main>
   );
+}
+
+function InitializationState(props: { busy: boolean; error: string; onRetry: () => Promise<void> }) {
+  if (props.busy) return <main className="app-loading">正在读取本地配置...</main>;
+  return (
+    <main className="app-loading"><section className="initialization-error"><AlertCircle size={28} /><h1>应用初始化失败</h1><p>{props.error}</p><button className="command-button" onClick={props.onRetry} type="button">重试</button></section></main>
+  );
+}
+
+interface WorkspaceProps {
+  activeProfile: DesktopSnapshot["profiles"][number] | null;
+  snapshot: DesktopSnapshot;
+  apply: (action: Promise<DesktopSnapshot>, label: string) => Promise<void>;
+  execute: (action: Promise<unknown>, label: string) => Promise<void>;
+  validateApifox: typeof desktop.validateApifox;
+}
+
+function Workspace(props: WorkspaceProps) {
+  const profile = props.activeProfile;
+  if (!profile) return <EmptyWorkspace />;
+  return (
+    <>
+      <ProxyHeader profile={profile} status={props.snapshot.proxyStatus} onStart={() => props.apply(desktop.startProxy(), "启动代理")} onStop={() => props.apply(desktop.stopProxy(), "停止代理")} />
+      <div className="workspace-grid">
+        <CertificatePanel certificate={props.snapshot.certificate} onGenerate={() => props.apply(desktop.generateCertificate(), "生成证书")} onOpen={() => props.execute(desktop.openCertificate(), "打开证书")} onRefresh={() => props.apply(desktop.refreshCertificate(), "刷新证书信任")} />
+        <ConnectionGuide certificate={props.snapshot.certificate} hasTraffic={props.snapshot.logs.length > 0} profile={profile} proxyStatus={props.snapshot.proxyStatus} />
+        <ApifoxSyncPanel profile={profile} onSync={(request) => props.apply(desktop.syncApifox(request), "同步 Apifox 规则")} onValidate={props.validateApifox} />
+      </div>
+      <RuleTable profile={profile} onDelete={(id) => props.apply(desktop.deleteRule(profile.id, id), "删除规则")} onOpenUrl={(url) => props.execute(desktop.openExternalUrl(url), "打开 Apifox 接口")} onReset={() => props.apply(desktop.clearRules(profile.id), "重置规则列表")} onSave={(input: RuleInput) => props.apply(desktop.saveRule(input), "保存规则")} onToggle={(id, enabled) => props.apply(desktop.setRuleEnabled(profile.id, id, enabled), "切换接口 Mock")} onToggleGlobal={(enabled) => props.apply(desktop.setGlobalMockEnabled(profile.id, enabled), "切换全局 Mock")} />
+      <RequestLogPanel logs={props.snapshot.logs} onClear={() => props.apply(desktop.clearLogs(), "清空请求记录")} />
+    </>
+  );
+}
+
+function EmptyWorkspace() {
+  return <section className="empty-workspace"><Monitor size={36} /><h1>创建第一个联调项目</h1><p>点击左侧项目标题旁的新增图标，配置小程序真实接口域名和本地代理端口。</p></section>;
+}
+
+function RuntimeNotice() {
+  if (desktop.isDesktopRuntime()) return null;
+  return <div className="runtime-notice"><AlertCircle size={16} />当前为网页预览，网络代理、本地配置和证书功能只在打包后的桌面应用中可用。</div>;
+}
+
+function ErrorBanner({ error, onClose }: { error: string; onClose: () => void }) {
+  if (!error) return null;
+  return <div className="error-banner"><AlertCircle size={17} /><span>{error}</span><button className="icon-button" onClick={onClose} type="button"><X size={16} /></button></div>;
+}
+
+function errorMessage(reason: unknown) {
+  if (reason instanceof Error) return reason.message;
+  return String(reason);
 }
 
 export default App;

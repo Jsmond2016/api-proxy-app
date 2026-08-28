@@ -702,6 +702,34 @@ h2 {
   gap: 7px;
 }
 
+.response-payload-heading,
+.response-search-tools {
+  display: flex;
+  align-items: center;
+}
+
+.response-payload-heading {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.response-search-tools {
+  gap: 5px;
+  min-width: 0;
+}
+
+.response-search-tools .ant-input-affix-wrapper {
+  width: 250px;
+}
+
+.response-match-count {
+  min-width: 42px;
+  color: #6b7c70;
+  font-size: 12px;
+  text-align: center;
+  white-space: nowrap;
+}
+
 .response-payload pre {
   max-height: 420px;
   white-space: pre;
@@ -712,6 +740,12 @@ h2 {
   border-radius: 2px;
   background: #f6d778;
   color: #273b2e;
+}
+
+.response-payload mark.active-match {
+  background: #f08c46;
+  color: #fff;
+  box-shadow: 0 0 0 1px #d96b27;
 }
 
 .danger-utility {

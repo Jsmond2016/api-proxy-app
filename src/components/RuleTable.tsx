@@ -1,8 +1,9 @@
 import { Alert, App as AntApp, Button, Drawer, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Spin, Switch, Table, Tooltip } from "antd";
 import type { InputRef } from "antd";
 import type { TableColumnsType } from "antd";
-import { Copy, Pencil, Play, Plus, RotateCcw, Search, Trash2, WandSparkles } from "lucide-react";
+import { ChevronDown, ChevronUp, Copy, Pencil, Play, Plus, RotateCcw, Search, Trash2, WandSparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { MouseEvent } from "react";
 import type { RefObject } from "react";
 import type { MatchMode, OperationResolution, ProjectProfile, ProxyRule, ResolveOperationInput, RuleInput } from "../types";
@@ -74,6 +75,7 @@ function RuleActions(props: { rule: ProxyRule; globalMockEnabled: boolean; onDel
   const [debugging, setDebugging] = useState(false);
   const [result, setResult] = useState<TestResult | null>(null);
   const [responseSearch, setResponseSearch] = useState("");
+  const [responseMatchIndex, setResponseMatchIndex] = useState(0);
   const responseSearchRef = useRef<InputRef>(null);
   const responseContainerRef = useRef<HTMLPreElement>(null);
   const { message } = AntApp.useApp();
@@ -81,12 +83,12 @@ function RuleActions(props: { rule: ProxyRule; globalMockEnabled: boolean; onDel
     if (!props.globalMockEnabled) { void message.warning("全局 Mock 已关闭，请先开启后再测试接口"); return; }
     if (!props.rule.enabled) { void message.warning("请先打开当前接口的 Mock 开关"); return; }
     if (!props.rule.target) { void message.warning("当前接口未配置 Mock 目标"); return; }
-    setTesting(true); setResult(null); setResponseSearch("");
+    setTesting(true); setResult(null); setResponseSearch(""); setResponseMatchIndex(0);
     try { const response = await fetch(props.rule.target, { method: props.rule.method }); const body = await response.text(); setResult({ status: response.status, statusText: response.statusText, body: formatResponseBody(body), error: "" }); } catch (reason) { setResult({ status: 0, statusText: "请求失败", body: "", error: errorMessage(reason) }); } finally { setTesting(false); }
   }
   useEffect(() => {
     if (!result) return;
-    function focusSearch(event: KeyboardEvent) {
+    function focusSearch(event: globalThis.KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
         event.preventDefault();
         responseSearchRef.current?.focus();
@@ -95,22 +97,40 @@ function RuleActions(props: { rule: ProxyRule; globalMockEnabled: boolean; onDel
     window.addEventListener("keydown", focusSearch);
     return () => window.removeEventListener("keydown", focusSearch);
   }, [result]);
+  const matchCount = countResponseMatches(result?.body || "", responseSearch);
   useEffect(() => {
-    const firstMatch = responseContainerRef.current?.querySelector("mark");
-    firstMatch?.scrollIntoView({ block: "center" });
-  }, [responseSearch]);
+    if (!responseSearch.trim() || matchCount === 0) return;
+    const activeMatch = responseContainerRef.current?.querySelector("mark.active-match");
+    activeMatch?.scrollIntoView({ block: "center" });
+  }, [matchCount, responseMatchIndex, responseSearch]);
+  function updateResponseSearch(value: string) {
+    setResponseSearch(value);
+    setResponseMatchIndex(0);
+  }
+  function moveResponseMatch(direction: 1 | -1) {
+    if (matchCount === 0) return;
+    setResponseMatchIndex((current) => {
+      const next = current + direction;
+      if (next < 0) return matchCount - 1;
+      if (next >= matchCount) return 0;
+      return next;
+    });
+  }
   async function debugSingle() {
     setDebugging(true);
     try { await props.onDebugSingle(props.rule.id); void message.success("已关闭其他接口，仅保留当前接口"); } catch (reason) { void message.error(errorMessage(reason)); } finally { setDebugging(false); }
   }
-  return <div className="row-actions"><Tooltip title="测试接口"><Button aria-label="测试接口" className="row-action" icon={<Play size={15} />} loading={testing} onClick={test} type="text" /></Tooltip><Tooltip title="仅调试当前接口"><Button aria-label="仅调试当前接口" className="row-action" icon={<span className="debug-single-icon">1</span>} loading={debugging} onClick={debugSingle} type="text" /></Tooltip><Tooltip title="编辑接口"><Button aria-label="编辑接口" className="row-action" icon={<Pencil size={15} />} onClick={() => props.onEdit(props.rule)} type="text" /></Tooltip><Popconfirm cancelText="取消" description="Apifox 接口可在后续同步相同 Tag 时重新生成。" okButtonProps={{ danger: true }} okText="确认删除" onConfirm={() => props.onDelete(props.rule.id)} title={`删除“${props.rule.name}”？`}><Tooltip title="删除接口"><Button aria-label="删除接口" className="row-action" danger icon={<Trash2 size={15} />} type="text" /></Tooltip></Popconfirm><Modal onCancel={() => setResult(null)} open={Boolean(result) || testing} title={`测试接口 · ${props.rule.name}`} width={700} footer={<div className="test-modal-footer"><Button disabled={!props.rule.apifoxWebUrl} onClick={() => { if (props.rule.apifoxWebUrl) { void props.onOpenUrl(props.rule.apifoxWebUrl); return; } void message.warning("当前接口没有可用的 Apifox 设置页面链接"); }} type="primary">去 Mock 接口</Button></div>}>{renderTestContent(testing, result, props.rule, responseSearch, setResponseSearch, responseSearchRef, responseContainerRef)}</Modal></div>;
+  return <div className="row-actions"><Tooltip title="测试接口"><Button aria-label="测试接口" className="row-action" icon={<Play size={15} />} loading={testing} onClick={test} type="text" /></Tooltip><Tooltip title="仅调试当前接口"><Button aria-label="仅调试当前接口" className="row-action" icon={<span className="debug-single-icon">1</span>} loading={debugging} onClick={debugSingle} type="text" /></Tooltip><Tooltip title="编辑接口"><Button aria-label="编辑接口" className="row-action" icon={<Pencil size={15} />} onClick={() => props.onEdit(props.rule)} type="text" /></Tooltip><Popconfirm cancelText="取消" description="Apifox 接口可在后续同步相同 Tag 时重新生成。" okButtonProps={{ danger: true }} okText="确认删除" onConfirm={() => props.onDelete(props.rule.id)} title={`删除“${props.rule.name}”？`}><Tooltip title="删除接口"><Button aria-label="删除接口" className="row-action" danger icon={<Trash2 size={15} />} type="text" /></Tooltip></Popconfirm><Modal onCancel={() => setResult(null)} open={Boolean(result) || testing} title={`测试接口 · ${props.rule.name}`} width={700} footer={<div className="test-modal-footer"><Button disabled={!props.rule.apifoxWebUrl} onClick={() => { if (props.rule.apifoxWebUrl) { void props.onOpenUrl(props.rule.apifoxWebUrl); return; } void message.warning("当前接口没有可用的 Apifox 设置页面链接"); }} type="primary">去 Mock 接口</Button></div>}>{renderTestContent(testing, result, props.rule, responseSearch, updateResponseSearch, responseSearchRef, responseContainerRef, responseMatchIndex, matchCount, moveResponseMatch)}</Modal></div>;
 }
 
 interface TestResult { status: number; statusText: string; body: string; error: string }
-function renderTestContent(testing: boolean, result: TestResult | null, rule: ProxyRule, responseSearch: string, onSearch: (value: string) => void, responseSearchRef: RefObject<InputRef | null>, responseContainerRef: RefObject<HTMLPreElement | null>) { if (testing) return <div className="test-loading"><Spin size="large" /><span>正在发送请求...</span><code>{rule.target}</code></div>; return renderTestResult(result, rule, responseSearch, onSearch, responseSearchRef, responseContainerRef); }
-function renderTestResult(result: TestResult | null, rule: ProxyRule, responseSearch: string, onSearch: (value: string) => void, responseSearchRef: RefObject<InputRef | null>, responseContainerRef: RefObject<HTMLPreElement | null>) { if (!result) return null; let message = result.statusText; let type: "success" | "error" = "error"; if (result.status) message = `${result.status} ${result.statusText}`; if (result.status >= 200 && result.status < 300) type = "success"; return <div className="test-result"><Alert message={message} type={type} showIcon /><div><strong>原始接口</strong><span className="original-url"><code>{rule.method} {rule.path}</code><Tooltip title="复制原始接口"><Button aria-label="复制原始接口" icon={<Copy size={14} />} onClick={() => { void copyOriginalUrl(rule); }} size="small" type="text" /></Tooltip></span></div><div><strong>Mock 地址</strong><code>{rule.target}</code></div>{renderTestPayload(result, responseSearch, onSearch, responseSearchRef, responseContainerRef)}</div>; }
-function renderTestPayload(result: TestResult, responseSearch: string, onSearch: (value: string) => void, responseSearchRef: RefObject<InputRef | null>, responseContainerRef: RefObject<HTMLPreElement | null>) { if (result.error) return <div><strong>错误信息</strong><pre>{result.error}</pre></div>; return <div className="response-payload"><strong>响应内容</strong><Input ref={responseSearchRef} allowClear onChange={(event) => onSearch(event.target.value)} placeholder="搜索响应内容（Ctrl/Cmd+F）" prefix={<Search size={14} />} value={responseSearch} /><pre ref={responseContainerRef}>{renderSearchableResponse(result.body || "（空响应）", responseSearch)}</pre></div>; }
-function renderSearchableResponse(body: string, query: string) { if (!query.trim()) return body; const parts = body.split(new RegExp(`(${escapeRegExp(query)})`, "gi")); return parts.map((part, index) => { if (part.toLowerCase() === query.toLowerCase()) return <mark key={`${part}-${index}`}>{part}</mark>; return part; }); }
+function renderTestContent(testing: boolean, result: TestResult | null, rule: ProxyRule, responseSearch: string, onSearch: (value: string) => void, responseSearchRef: RefObject<InputRef | null>, responseContainerRef: RefObject<HTMLPreElement | null>, responseMatchIndex: number, matchCount: number, moveResponseMatch: (direction: 1 | -1) => void) { if (testing) return <div className="test-loading"><Spin size="large" /><span>正在发送请求...</span><code>{rule.target}</code></div>; return renderTestResult(result, rule, responseSearch, onSearch, responseSearchRef, responseContainerRef, responseMatchIndex, matchCount, moveResponseMatch); }
+function renderTestResult(result: TestResult | null, rule: ProxyRule, responseSearch: string, onSearch: (value: string) => void, responseSearchRef: RefObject<InputRef | null>, responseContainerRef: RefObject<HTMLPreElement | null>, responseMatchIndex: number, matchCount: number, moveResponseMatch: (direction: 1 | -1) => void) { if (!result) return null; let message = result.statusText; let type: "success" | "error" = "error"; if (result.status) message = `${result.status} ${result.statusText}`; if (result.status >= 200 && result.status < 300) type = "success"; return <div className="test-result"><Alert message={message} type={type} showIcon /><div><strong>原始接口</strong><span className="original-url"><code>{rule.method} {rule.path}</code><Tooltip title="复制原始接口"><Button aria-label="复制原始接口" icon={<Copy size={14} />} onClick={() => { void copyOriginalUrl(rule); }} size="small" type="text" /></Tooltip></span></div><div><strong>Mock 地址</strong><code>{rule.target}</code></div>{renderTestPayload(result, responseSearch, onSearch, responseSearchRef, responseContainerRef, responseMatchIndex, matchCount, moveResponseMatch)}</div>; }
+function renderTestPayload(result: TestResult, responseSearch: string, onSearch: (value: string) => void, responseSearchRef: RefObject<InputRef | null>, responseContainerRef: RefObject<HTMLPreElement | null>, responseMatchIndex: number, matchCount: number, moveResponseMatch: (direction: 1 | -1) => void) { if (result.error) return <div><strong>错误信息</strong><pre>{result.error}</pre></div>; function handleKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) { if (event.key !== "Enter") return; event.preventDefault(); if (event.shiftKey) moveResponseMatch(-1); else moveResponseMatch(1); } return <div className="response-payload"><div className="response-payload-heading"><strong>响应内容</strong><div className="response-search-tools"><Input ref={responseSearchRef} allowClear onChange={(event) => onSearch(event.target.value)} onKeyDown={handleKeyDown} placeholder="搜索响应内容（Ctrl/Cmd+F）" prefix={<Search size={14} />} value={responseSearch} /><span className="response-match-count">{responseMatchLabel(responseMatchIndex, matchCount)}</span><Tooltip title="上一个匹配"><Button aria-label="上一个匹配" disabled={matchCount === 0} icon={<ChevronUp size={15} />} onClick={() => moveResponseMatch(-1)} size="small" /></Tooltip><Tooltip title="下一个匹配"><Button aria-label="下一个匹配" disabled={matchCount === 0} icon={<ChevronDown size={15} />} onClick={() => moveResponseMatch(1)} size="small" /></Tooltip></div></div><pre ref={responseContainerRef}>{renderSearchableResponse(result.body || "（空响应）", responseSearch, responseMatchIndex)}</pre></div>; }
+function renderSearchableResponse(body: string, query: string, activeMatchIndex: number) { if (!query.trim()) return body; const parts = body.split(new RegExp(`(${escapeRegExp(query)})`, "gi")); let matchIndex = 0; return parts.map((part, index) => { if (part.toLowerCase() === query.toLowerCase()) { const currentIndex = matchIndex; matchIndex += 1; return <mark className={matchClassName(currentIndex === activeMatchIndex)} key={`${part}-${index}-${currentIndex}`}>{part}</mark>; } return part; }); }
+function matchClassName(active: boolean) { if (active) return "active-match"; return undefined; }
+function responseMatchLabel(index: number, count: number) { if (count === 0) return "0 / 0"; return `${index + 1} / ${count}`; }
+function countResponseMatches(body: string, query: string) { if (!query.trim()) return 0; return Array.from(body.matchAll(new RegExp(escapeRegExp(query), "gi"))).length; }
 function escapeRegExp(value: string) { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 
 function RulePath(props: { rule: ProxyRule; onOpenUrl: (url: string) => Promise<void> }) {

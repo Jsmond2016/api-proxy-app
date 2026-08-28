@@ -76,8 +76,9 @@ button {
   align-items: center;
   min-height: 72px;
   padding: 12px 28px;
-  background: #173f35;
-  color: #dce8dd;
+  background: #e8eee7;
+  color: #52685a;
+  border-bottom: 1px solid #d9e0d8;
 }
 
 .brand-lockup,
@@ -110,6 +111,11 @@ button {
 .project-tab-label { display: inline-flex; align-items: center; gap: 8px; }
 .project-tab-label small { color: #8fb49b; font-size: 11px; }
 .project-tabs-actions { display: flex; align-items: center; gap: 4px; }
+
+.header-brand { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.header-brand .brand-mark { width: 28px; height: 28px; border-color: #6f9b82; color: #1f5b43; font-size: 17px; }
+.header-brand-name { margin: 0; color: #1f5b43; font-family: "SF Mono", Menlo, monospace; font-size: 13px; font-weight: 800; }
+.header-brand-caption { margin: 2px 0 0; color: #78907f; font-family: "SF Mono", Menlo, monospace; font-size: 8px; }
 
 .brand-mark {
   display: grid;
@@ -262,6 +268,8 @@ button {
   gap: 13px;
   margin-top: 8px;
 }
+
+.proxy-title-row h1 { font-size: 24px; }
 
 h1,
 h2,
@@ -982,6 +990,8 @@ h2 {
 .search-field {
   display: flex;
   align-items: center;
+  min-width: 260px;
+  width: 320px;
   width: 190px;
   min-height: 36px;
   gap: 8px;
@@ -991,6 +1001,9 @@ h2 {
   background: #ffffff;
   color: #718074;
 }
+
+.danger-button { border-color: #c95e4a; background: #c95e4a; color: #ffffff; }
+.mock-help-tooltip { display: grid; gap: 5px; line-height: 1.5; }
 
 .search-field input {
   width: 100%;
@@ -1031,6 +1044,10 @@ h2 {
   display: grid;
   gap: 4px;
 }
+
+.rule-info-cell { display: grid; gap: 7px; min-width: 0; }
+.rule-info-cell > strong { overflow: hidden; color: #345141; text-overflow: ellipsis; white-space: nowrap; }
+.rule-info-cell .request-cell { min-width: 0; }
 
 .rule-name-cell strong {
   color: #274536;

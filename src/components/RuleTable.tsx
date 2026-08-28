@@ -41,9 +41,7 @@ export function RuleTable(props: RuleTableProps) {
 
   const columns = useMemo<TableColumnsType<ProxyRule>>(() => [
     { title: "Mock 开关", dataIndex: "enabled", width: 96, render: (_, rule) => <Switch aria-label={`切换${rule.name}`} checked={rule.enabled} onChange={(enabled) => props.onToggle(rule.id, enabled)} size="small" /> },
-    { title: "接口信息", dataIndex: "name", width: 180, render: (_, rule) => <div className="rule-name-cell"><strong>{rule.name}</strong><span>{ruleMeta(rule)}</span></div> },
-    { title: "请求", dataIndex: "path", width: 260, render: (_, rule) => <div className="request-cell"><span className={`method-badge method-${rule.method.toLowerCase()}`}>{rule.method}</span><RulePath rule={rule} onOpenUrl={props.onOpenUrl} /></div> },
-    { title: "匹配", dataIndex: "matchMode", width: 130, render: (_, rule) => <span className="match-mode">{rule.matchMode} · P{rule.priority}</span> },
+    { title: "接口信息", dataIndex: "name", width: 380, render: (_, rule) => <div className="rule-info-cell"><strong>{rule.name}</strong><span className="request-cell"><span className={`method-badge method-${rule.method.toLowerCase()}`}>{rule.method}</span><RulePath rule={rule} onOpenUrl={props.onOpenUrl} /></span></div> },
     { title: "Mock 目标", dataIndex: "target", width: 320, render: (target: string) => <div className="target-cell"><span title={target}>{target}</span></div> },
     { title: "操作", key: "actions", fixed: "right", width: 132, render: (_, rule) => <RuleActions globalMockEnabled={props.profile.globalMockEnabled} onDebugSingle={props.onDebugSingle} onDelete={props.onDelete} onEdit={setEditing} onOpenUrl={props.onOpenUrl} rule={rule} /> },
   ], [props.onDelete, props.onDebugSingle, props.onOpenUrl, props.onToggle]);
@@ -51,13 +49,13 @@ export function RuleTable(props: RuleTableProps) {
   return (
     <section className="rules-section">
       <div className="section-heading">
-        <div className="rules-heading-primary"><h2>Mock 接口 <Tooltip title="不生效时请检查：全局 Mock 开关和当前接口开关是否开启；真实接口域名、路径前缀是否匹配；Apifox 中 Method 是否定义正确（例如实际 GET 却定义为 POST）；接口路径和匹配方式是否一致；HTTPS 证书是否已信任。"><span className="help-icon" aria-label="Mock 接口不生效排查提示">?</span></Tooltip></h2><Input allowClear className="search-field" placeholder="搜索接口名称、URL 或 Tag" prefix={<Search size={16} />} value={keyword} onChange={(event) => setKeyword(event.target.value)} /></div>
+        <div className="rules-heading-primary"><h2>Mock 接口 <Tooltip title={<div className="mock-help-tooltip"><div>• 全局 Mock 或当前接口开关未开启</div><div>• 真实接口域名或路径前缀不匹配</div><div>• Apifox Method 定义错误，例如 GET 请求定义为 POST</div><div>• 接口路径或匹配方式不一致</div><div>• HTTPS 证书未信任</div></div>}><span className="help-icon" aria-label="Mock 接口不生效排查提示">?</span></Tooltip></h2><Input allowClear className="search-field" placeholder="搜索接口名称、URL 或 Tag" prefix={<Search size={16} />} value={keyword} onChange={(event) => setKeyword(event.target.value)} /></div>
         <div className="rules-tools">
           <div className="global-mock-control"><span>全局 Mock</span><Switch aria-label="全局 Mock 开关" checked={props.profile.globalMockEnabled} loading={togglingGlobal} onChange={toggleGlobal} /></div>
           <Button disabled={selectedRowKeys.length === 0} icon={<WandSparkles size={15} />} onClick={() => { void copySimulationPrompt(props.profile.rules.filter((rule) => selectedRowKeys.includes(rule.id)), message); }}>真机模拟</Button>
           <Button className="command-button" icon={<Plus size={16} />} onClick={() => setCreating(true)} type="primary">添加接口</Button>
           <Popconfirm cancelText="取消" description="将清空全部 Mock 接口及已同步 Tag，项目连接、Token 和全局开关保持不变。" disabled={props.profile.rules.length === 0} okButtonProps={{ danger: true }} okText="确认重置" onConfirm={async () => { await props.onReset(); setKeyword(""); }} title="重置 Mock 接口列表？">
-            <Button className="outline-button" disabled={props.profile.rules.length === 0} icon={<RotateCcw size={16} />}>重置接口</Button>
+          <Button className="danger-button" danger disabled={props.profile.rules.length === 0} icon={<RotateCcw size={16} />}>重置接口</Button>
           </Popconfirm>
         </div>
       </div>
@@ -172,7 +170,6 @@ function RuleDialog(props: { visible: boolean; profile: ProjectProfile; rule: Pr
   );
 }
 
-function ruleMeta(rule: ProxyRule) { const tags = rule.tags.join(", "); if (tags) return `${rule.source} · ${tags}`; return rule.source; }
 function ruleDialogTitle(rule: ProxyRule | null) { if (rule) return "编辑 Mock 接口"; return "添加 Mock 接口"; }
 function saveButtonLabel(rule: ProxyRule | null) { if (rule) return "更新"; return "添加"; }
 function resolvingIndicator(resolving: boolean) { if (resolving) return <Spin size="small" />; return null; }

@@ -1,6 +1,6 @@
 import { Alert, App as AntApp, Button, Drawer, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Spin, Switch, Table, Tooltip } from "antd";
 import type { TableColumnsType } from "antd";
-import { Copy, Pencil, Play, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
+import { Copy, Pencil, Play, Plus, RotateCcw, Search, Trash2, WandSparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 import type { MatchMode, OperationResolution, ProjectProfile, ProxyRule, ResolveOperationInput, RuleInput } from "../types";
@@ -22,6 +22,8 @@ export function RuleTable(props: RuleTableProps) {
   const [editing, setEditing] = useState<ProxyRule | null>(null);
   const [creating, setCreating] = useState(false);
   const [togglingGlobal, setTogglingGlobal] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
+  const { message } = AntApp.useApp();
   const visible = useMemo(() => {
     const query = keyword.trim().toLowerCase();
     if (!query) return props.profile.rules;
@@ -52,6 +54,7 @@ export function RuleTable(props: RuleTableProps) {
         <div className="rules-heading-primary"><h2>Mock 接口 <Tooltip title="不生效时请检查：全局 Mock 开关和当前接口开关是否开启；真实接口域名、路径前缀是否匹配；Apifox 中 Method 是否定义正确（例如实际 GET 却定义为 POST）；接口路径和匹配方式是否一致；HTTPS 证书是否已信任。"><span className="help-icon" aria-label="Mock 接口不生效排查提示">?</span></Tooltip></h2><Input allowClear className="search-field" placeholder="搜索接口名称、URL 或 Tag" prefix={<Search size={16} />} value={keyword} onChange={(event) => setKeyword(event.target.value)} /></div>
         <div className="rules-tools">
           <div className="global-mock-control"><span>全局 Mock</span><Switch aria-label="全局 Mock 开关" checked={props.profile.globalMockEnabled} loading={togglingGlobal} onChange={toggleGlobal} /></div>
+          <Button disabled={selectedRowKeys.length === 0} icon={<WandSparkles size={15} />} onClick={() => { void copySimulationPrompt(props.profile.rules.filter((rule) => selectedRowKeys.includes(rule.id)), message); }}>真机模拟</Button>
           <Button className="command-button" icon={<Plus size={16} />} onClick={() => setCreating(true)} type="primary">添加接口</Button>
           <Popconfirm cancelText="取消" description="将清空全部 Mock 接口及已同步 Tag，项目连接、Token 和全局开关保持不变。" disabled={props.profile.rules.length === 0} okButtonProps={{ danger: true }} okText="确认重置" onConfirm={async () => { await props.onReset(); setKeyword(""); }} title="重置 Mock 接口列表？">
             <Button className="outline-button" disabled={props.profile.rules.length === 0} icon={<RotateCcw size={16} />}>重置接口</Button>
@@ -59,7 +62,7 @@ export function RuleTable(props: RuleTableProps) {
         </div>
       </div>
       <div className="rule-table-wrap">
-        <Table<ProxyRule> columns={columns} dataSource={visible} locale={{ emptyText: <Empty description="尚无 Mock 接口。先同步 Apifox Tag，或手动添加接口。" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }} pagination={false} rowKey="id" scroll={{ x: 1082, y: 360 }} size="small" />
+        <Table<ProxyRule> columns={columns} dataSource={visible} locale={{ emptyText: <Empty description="尚无 Mock 接口。先同步 Apifox Tag，或手动添加接口。" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }} pagination={false} rowKey="id" rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys.map(String)) }} scroll={{ x: 1082 }} size="small" />
       </div>
       <RuleDialog key={editing?.id || String(creating)} profile={props.profile} rule={editing} visible={creating || Boolean(editing)} onClose={() => { setCreating(false); setEditing(null); }} onResolve={props.onResolve} onSave={props.onSave} />
     </section>
@@ -177,3 +180,4 @@ function normalizeRulePath(value: string) { try { return new URL(value).pathname
 function errorMessage(reason: unknown) { if (reason instanceof Error) return reason.message; return String(reason); }
 function formatResponseBody(body: string) { try { return JSON.stringify(JSON.parse(body), null, 2); } catch { return body; } }
 async function copyOriginalUrl(rule: ProxyRule) { try { await navigator.clipboard.writeText(`${rule.method} ${rule.path}`); } catch { return; } }
+async function copySimulationPrompt(rules: ProxyRule[], message: ReturnType<typeof AntApp.useApp>["message"]) { const lines = rules.map((rule) => `- 原始接口：${rule.method} ${rule.path}\n  Mock 接口：${rule.target}`).join("\n"); const prompt = `请帮我将当前项目中以下接口的请求 URL 替换为对应的 Mock 接口 URL。\n\n${lines}\n\n限制：只替换 URL 请求地址，不修改请求方法、请求参数、请求体、响应处理、业务逻辑和其他接口代码。`; try { await navigator.clipboard.writeText(prompt); message.success("真机模拟提示词已复制到剪贴板"); } catch { message.error("提示词复制失败，请检查剪贴板权限"); } }

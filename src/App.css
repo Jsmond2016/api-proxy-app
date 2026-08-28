@@ -1000,21 +1000,7 @@ h2 {
   font-size: 12px;
 }
 
-.rule-table-wrap {
-  height: 420px;
-  overflow: hidden;
-  overscroll-behavior: contain;
-  border: 1px solid #d8ded7;
-  border-radius: 6px;
-  background: #ffffff;
-  scrollbar-gutter: stable;
-}
-
-.rule-table-wrap .ant-table-wrapper,
-.rule-table-wrap .ant-spin-nested-loading,
-.rule-table-wrap .ant-spin-container {
-  height: 100%;
-}
+.rule-table-wrap { border: 1px solid #d8ded7; border-radius: 6px; background: #ffffff; }
 
 .rule-table-wrap .ant-table {
   color: #364b3c;
@@ -1029,11 +1015,6 @@ h2 {
 
 .rule-table-wrap .ant-table-cell {
   vertical-align: middle;
-}
-
-.rule-table-wrap .ant-table-body {
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
 }
 
 .global-mock-control {

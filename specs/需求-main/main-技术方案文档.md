@@ -408,6 +408,7 @@ Content-Type: application/json
 | 2026-08-28 | 提议 R31：测试弹框增加原始接口复制和按钮顺序调整 | 在测试详情中显示 `method + path` 原始接口并使用 Clipboard API 复制；通过 Modal `okButtonProps`、`cancelButtonProps` 和 footer 布局实现“去 Mock 接口”左、“关闭”右 | R31 | GPT-5 Codex |
 | 2026-08-28 | 用户通过 `ac` 确认 R31，并补充确认 R32 | R31、R32 | GPT-5 Codex | 同步实施测试弹框信息/按钮调整，以及 Mock 接口标题间距、配置按钮主题色和右对齐布局 |
 | 2026-08-28 | 完成 R31-R32 | R31、R32 | GPT-5 Codex | 测试弹框增加原始接口复制并调整按钮顺序；配置入口隐藏数量、突出 Apifox 主按钮并右对齐；规则标题与表格间距固定为 16px |
+| 2026-08-28 | 完成 R33-R35 | R33、R34、R35 | GPT-5 Codex | 移除规则表固定高度；请求记录默认已 Mock 并显示完整日期时间；新增勾选接口生成真机模拟 AI 提示词并复制到剪贴板 |
 
 ## 验证结果
 

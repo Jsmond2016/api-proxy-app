@@ -281,7 +281,7 @@ impl RuleProxyHandler {
 }
 
 impl RuleProxyHandler {
-    fn mock_enabled(&self) -> bool {
+    fn profile_available(&self) -> bool {
         let Ok(snapshot) = self.snapshot.lock() else {
             return false;
         };
@@ -289,8 +289,7 @@ impl RuleProxyHandler {
             .profiles
             .iter()
             .find(|profile| profile.id == self.profile_id)
-            .map(|profile| profile.global_mock_enabled)
-            .unwrap_or(false)
+            .is_some()
     }
 }
 
@@ -300,7 +299,7 @@ impl HttpHandler for RuleProxyHandler {
         _context: &HttpContext,
         _request: &Request<Body>,
     ) -> impl Future<Output = bool> + Send {
-        let intercept = self.mock_enabled();
+        let intercept = self.profile_available();
         async move { intercept }
     }
 
@@ -309,7 +308,7 @@ impl HttpHandler for RuleProxyHandler {
         _context: &HttpContext,
         _client_hello: hudsucker::rustls::server::ClientHello<'_>,
     ) -> impl Future<Output = bool> + Send {
-        let intercept = self.mock_enabled();
+        let intercept = self.profile_available();
         async move { intercept }
     }
 

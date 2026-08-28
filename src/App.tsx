@@ -23,6 +23,7 @@ function App() {
   const [appVersion, setAppVersion] = useState(desktop.buildVersion);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const allowCloseRef = useRef(false);
+  const closeListenerRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     let unsubscribe: () => void = () => undefined;
@@ -44,14 +45,27 @@ function App() {
         event.preventDefault();
         setCloseConfirmOpen(true);
       });
+      closeListenerRef.current = unlisten;
     });
-    return () => { disposed = true; if (unlisten) unlisten(); };
+    return () => {
+      disposed = true;
+      closeListenerRef.current?.();
+      closeListenerRef.current = null;
+    };
   }, []);
 
   async function confirmClose() {
     allowCloseRef.current = true;
+    closeListenerRef.current?.();
+    closeListenerRef.current = null;
     const { getCurrentWindow } = await import("@tauri-apps/api/window");
-    await getCurrentWindow().destroy();
+    try {
+      await getCurrentWindow().close();
+    } catch (reason) {
+      allowCloseRef.current = false;
+      showError(reason);
+      setCloseConfirmOpen(false);
+    }
   }
 
   async function loadSnapshot() {

@@ -112,4 +112,4 @@
 | 日期 | 阶段 | 实际变更 | 验证结果 |
 | --- | --- | --- | --- |
 | 2026-08-28 | 阶段一 | 移除未使用 `public/tauri.svg`、`public/vite.svg`、`src/assets/react.svg`；移除 Vite favicon，更新 HTML 标题；README 改为在线 Apifox、Replace 和通用版本产物说明；旧 `specs/tauri-desktop-app/` 三份文档增加历史归档提示 | `pnpm build` 通过；构建产物不再引用 Vite favicon |
-| 2026-08-28 | 阶段二 | 删除 `src/lib/desktop.ts` 未使用的 `startProxy`/`stopProxy` 导出；删除 `App.css` 中无 JSX 引用的旧 project/sidebar、brand 辅助、sync-mode、match-mode 样式 | `pnpm build`、`pnpm run check:source`、`git diff --check` 通过；代理 Rust 代码未改动 |
+| 2026-08-28 | 阶段二 | 删除 `src/lib/desktop.ts` 未使用的 `startProxy`/`stopProxy` 导出；删除 `App.css` 中无 JSX 引用的旧 project/sidebar、brand 辅助、sync-mode、match-mode 样式；补充关闭确认和安装型 DMG 打包维护 | `pnpm build`、`pnpm run check:source`、`git diff --check` 通过；`pnpm package:mac` 在授权环境下通过 |

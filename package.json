@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "package:mac": "pnpm tauri build --bundles dmg",
+    "package:mac": "node scripts/package-mac.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
     "check:source": "node scripts/check-source-limits.mjs"

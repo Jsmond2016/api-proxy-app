@@ -388,6 +388,7 @@ fn migrate_legacy_rule(rule: LegacyRule) -> ProxyRule {
         path: rule.path,
         match_mode,
         target: rule.target,
+        custom_response_body: String::new(),
         enabled: rule.enabled,
         tags: vec![rule.tag],
         priority: 100,

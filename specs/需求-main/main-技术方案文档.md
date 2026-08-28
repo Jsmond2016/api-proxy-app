@@ -78,6 +78,7 @@ Rust Application Services
 | R47 | `RuleActions` 维护响应搜索匹配总数与当前索引；搜索词变化时重置索引并定位首个 `<mark>`，上/下按钮及 Enter/Shift+Enter 按循环索引切换，当前匹配使用独立样式并滚动到可视区域；搜索无结果时导航禁用 | `RuleTable.tsx`、`App.css` | GPT-5 Codex | 前端构建、源码约束、搜索导航/键盘事件源码检查、桌面多匹配响应人工验收 | 已确认 |
 | R48 | `Workspace` 在 `activeProfile=null` 时先渲染 `ProjectSidebar`，再展示紧凑空状态；复用既有 `ProfileDialog` 创建流程与 `profiles.length <= 1` 删除保护，不新增后端数据契约 | `App.tsx`、`ProjectSidebar.tsx`、`App.css` | GPT-5 Codex | 空配置首屏源码检查、前端构建、源码约束、创建首个项目人工验收 | 已确认 |
 | R49 | 为 `apply` 增加可选静默反馈参数；`Workspace.debugSingle` 的多步 `setGlobalMockEnabled`/`setRuleEnabled` 调用关闭逐步成功 Toast，全部完成后由工作区统一发送一条成功提示；移除 `RuleActions` 对该回调的重复成功/失败提示，错误继续由 `apply` 统一上报 | `App.tsx`、`RuleTable.tsx` | GPT-5 Codex | 复合操作 Toast 调用链检查、前端构建、源码约束、桌面人工点击验证 | 已确认 |
+| R50 | `ProxyRule`/`RuleInput` 增加 `custom_response_body`（serde 默认空字符串）并在 `build_custom_rule` 持久化；`RuleProxyHandler` 命中规则后若响应体非空则构造 200 响应并跳过 `rewrite_request`，否则保持 Apifox 转发；`RuleDialog` 移除 Tags/优先级，新增 textarea 和可编辑搜索导航，保存时提交自定义响应体 | `model.rs`、`commands.rs`、`proxy/mod.rs`、`types.ts`、`RuleTable.tsx`、`App.css` | GPT-5 Codex | Rust 单测/检查、前端构建、源码约束、旧配置反序列化和自定义响应优先级测试 | 已确认 |
 | R12 | 建立 Rust 单元/集成、前端测试和本地双 upstream E2E；更新 README/使用文档；构建并校验 arm64 app/dmg | tests、scripts、docs、Tauri bundle | GPT-5 Codex | `pnpm build`、`check:source`、`cargo test`、E2E、codesign、hdiutil | 已确认 |
 
 ## 数据模型设计
@@ -469,10 +470,12 @@ Content-Type: application/json
 | 2026-08-28 | 0.1.28 响应搜索多匹配导航交付包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；`hdiutil verify` 通过，SHA-256 `6556fdf8b425b904ef7770d9213cc603bf922ece4588fef467c820d729baef41` |
 | 2026-08-28 | 0.1.29 无项目创建入口修复交付包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；`hdiutil verify` 通过，SHA-256 `719b3009f3242e94202615f0e378a53b78dfdefb3fab69f9c91cdbf323cc736a` |
 | 2026-08-28 | 0.1.30 复合操作单次反馈修复交付包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；`hdiutil verify` 通过，SHA-256 `5afda4579c0833276e6e2f321bef313c63c582b64a869ef53d0e3b39880db846` |
+| 2026-08-28 | 0.1.31 自定义响应体交付包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；`hdiutil verify` 通过，SHA-256 `488e8beccaa26c075cbe13a75a665863e5b6d4c56597dea627c442b0be115b90` |
 | 2026-08-28 | 完成 R46 测试响应搜索与弹框操作调整 | 通过构建验证 | 测试弹框移除重复“关闭”按钮，“去 Mock 接口”固定右侧；响应内容增加搜索框、`Ctrl/Cmd+F` 聚焦、匹配高亮、首个匹配自动滚动和 420px 内部滚动；`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |
 | 2026-08-28 | 完成 R47 响应搜索多匹配导航 | 通过构建验证 | 增加匹配计数、当前命中高亮、上/下循环导航及 Enter/Shift+Enter 快捷键；关键词变化重置到首个匹配；`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |
 | 2026-08-28 | 用户通过 `ac` 确认并完成 R48 无项目创建入口修复 | 通过构建验证 | 空配置时 `Workspace` 提前返回导致项目 Tabs/新建按钮不渲染；调整为空状态仍渲染项目导航，复用现有创建弹框；`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |
 | 2026-08-28 | 用户通过 `ac` 确认并完成 R49 复合操作单次反馈 | 通过构建验证 | `apply` 支持静默成功反馈；仅调试当前接口的内部开关步骤不再逐条弹 Toast，全部成功后只提示一次；按钮移除重复反馈；`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |
+| 2026-08-28 | 完成 R50 自定义响应体 | 通过构建与 Rust 检查 | 添加/编辑弹框移除 Tag 和优先级，增加可编辑响应体及搜索导航；自定义响应体命中时代理直接返回 200 并记录响应，空值继续 Apifox 转发；`cargo check`、`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |
 | 2026-08-27 | 0.1.9 用户安装验收 | 通过 | 用户确认验证通过并要求提交当前实现 |
 | 2026-08-27 | 微信开发者工具真实项目人工验收 | 待用户执行 | 需要用户的真实源域名、Apifox 项目、Token 和微信开发者工具环境；按 `main-使用与验收文档.md` 验收 |
 # R20 Ant Design UI 迁移方案

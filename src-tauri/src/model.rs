@@ -92,6 +92,8 @@ pub struct ProxyRule {
     pub path: String,
     pub match_mode: MatchMode,
     pub target: String,
+    #[serde(default)]
+    pub custom_response_body: String,
     pub enabled: bool,
     pub tags: Vec<String>,
     pub priority: i32,
@@ -244,6 +246,8 @@ pub struct RuleInput {
     pub path: String,
     pub match_mode: MatchMode,
     pub target: String,
+    #[serde(default)]
+    pub custom_response_body: String,
     pub enabled: bool,
     #[serde(default)]
     pub tags: Vec<String>,

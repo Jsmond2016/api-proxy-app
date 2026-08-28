@@ -1,5 +1,6 @@
-import { Alert, App as AntApp, Button, Drawer, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Spin, Switch, Table, Tooltip } from "antd";
+import { Alert, App as AntApp, Button, Drawer, Empty, Form, Input, Modal, Popconfirm, Select, Space, Spin, Switch, Table, Tooltip } from "antd";
 import type { InputRef } from "antd";
+import type { TextAreaRef } from "antd/es/input/TextArea";
 import type { TableColumnsType } from "antd";
 import { ChevronDown, ChevronUp, Copy, Pencil, Play, Plus, RotateCcw, Search, Trash2, WandSparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -131,6 +132,7 @@ function renderSearchableResponse(body: string, query: string, activeMatchIndex:
 function matchClassName(active: boolean) { if (active) return "active-match"; return undefined; }
 function responseMatchLabel(index: number, count: number) { if (count === 0) return "0 / 0"; return `${index + 1} / ${count}`; }
 function countResponseMatches(body: string, query: string) { if (!query.trim()) return 0; return Array.from(body.matchAll(new RegExp(escapeRegExp(query), "gi"))).length; }
+function findMatchOffset(body: string, query: string, index: number) { if (!query) return 0; let offset = 0; for (let current = 0; current < index; current += 1) { const found = body.indexOf(query, offset); if (found < 0) return 0; offset = found + query.length; } const found = body.indexOf(query, offset); if (found < 0) return 0; return found; }
 function escapeRegExp(value: string) { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 
 function RulePath(props: { rule: ProxyRule; onOpenUrl: (url: string) => Promise<void> }) {
@@ -149,8 +151,10 @@ function RuleDialog(props: { visible: boolean; profile: ProjectProfile; rule: Pr
   const [path, setPath] = useState(props.rule?.path || "");
   const [matchMode, setMatchMode] = useState<MatchMode | "">(props.rule?.matchMode || "");
   const [target, setTarget] = useState(props.rule?.target || "");
-  const [tags, setTags] = useState(props.rule?.tags.join(", ") || "");
-  const [priority, setPriority] = useState<number | null>(props.rule?.priority ?? null);
+  const [customResponseBody, setCustomResponseBody] = useState(props.rule?.customResponseBody || "");
+  const [responseSearch, setResponseSearch] = useState("");
+  const [responseMatchIndex, setResponseMatchIndex] = useState(0);
+  const responseEditorRef = useRef<TextAreaRef>(null);
   const [apifoxWebUrl, setApifoxWebUrl] = useState(props.rule?.apifoxWebUrl || "");
   const [busy, setBusy] = useState(false);
   const [resolving, setResolving] = useState(false);
@@ -172,8 +176,6 @@ function RuleDialog(props: { visible: boolean; profile: ProjectProfile; rule: Pr
       setMethod(resolved.method);
       setMatchMode(resolved.matchMode);
       setTarget(resolved.target);
-      setTags(resolved.tags.join(", "));
-      setPriority(100);
       setApifoxWebUrl(resolved.apifoxWebUrl);
       void message.success("已从 Apifox 自动填充接口信息");
     } catch (reason) {
@@ -185,7 +187,7 @@ function RuleDialog(props: { visible: boolean; profile: ProjectProfile; rule: Pr
 
   async function submit() {
     if (!matchMode) return;
-    const input: RuleInput = { profileId: props.profile.id, name, method, path: normalizeRulePath(path), matchMode, target, enabled: true, tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean), priority: priority ?? 100, apifoxWebUrl };
+    const input: RuleInput = { profileId: props.profile.id, name, method, path: normalizeRulePath(path), matchMode, target, enabled: true, tags: [], priority: 100, apifoxWebUrl, customResponseBody };
     if (props.rule) {
       input.id = props.rule.id;
       input.enabled = props.rule.enabled;
@@ -199,6 +201,28 @@ function RuleDialog(props: { visible: boolean; profile: ProjectProfile; rule: Pr
     }
   }
 
+  const responseMatchCount = countResponseMatches(customResponseBody, responseSearch);
+  function moveResponseMatch(direction: 1 | -1) {
+    if (responseMatchCount === 0) return;
+    setResponseMatchIndex((current) => {
+      const next = current + direction;
+      if (next < 0) return responseMatchCount - 1;
+      if (next >= responseMatchCount) return 0;
+      return next;
+    });
+  }
+  function updateResponseSearch(value: string) {
+    setResponseSearch(value);
+    setResponseMatchIndex(0);
+  }
+  useEffect(() => {
+    if (!responseSearch.trim() || responseMatchCount === 0) return;
+    const query = responseSearch.toLowerCase();
+    const body = customResponseBody.toLowerCase();
+    const start = findMatchOffset(body, query, responseMatchIndex);
+    responseEditorRef.current?.resizableTextArea?.textArea.setSelectionRange(start, start + responseSearch.length);
+  }, [customResponseBody, responseMatchCount, responseMatchIndex, responseSearch]);
+
   return (
     <Drawer destroyOnHidden extra={<Space><Button disabled={busy} onClick={props.onClose}>取消</Button><Button disabled={saveDisabled} loading={busy} onClick={submit} type="primary">{saveButtonLabel(props.rule)}</Button></Space>} onClose={props.onClose} open={props.visible} title={ruleDialogTitle(props.rule)} width={600}>
       <Form layout="vertical" requiredMark={false}>
@@ -206,7 +230,7 @@ function RuleDialog(props: { visible: boolean; profile: ProjectProfile; rule: Pr
         <Form.Item label="接口名称" required><Input placeholder="请输入接口名称" value={name} onChange={(event) => setName(event.target.value)} /></Form.Item>
         <Form.Item label="Mock URL" required><Input placeholder="https://mock.example.com/api/orders/{id}" value={target} onChange={(event) => setTarget(event.target.value)} /></Form.Item>
         <div className="form-grid"><Form.Item label="请求方式" required><Select placeholder="请选择" value={method || undefined} onChange={setMethod} options={["GET", "POST", "PUT", "PATCH", "DELETE"].map((item) => ({ label: item, value: item }))} /></Form.Item><Form.Item label="匹配方式" required><Select placeholder="请选择" value={matchMode || undefined} onChange={setMatchMode} options={["exact", "template", "contains", "regex"].map((item) => ({ label: item, value: item }))} /></Form.Item></div>
-        <div className="form-grid"><Form.Item label="Tags（逗号分隔）"><Input placeholder="选填" value={tags} onChange={(event) => setTags(event.target.value)} /></Form.Item><Form.Item label="优先级"><InputNumber min={0} placeholder="选填" value={priority} onChange={setPriority} /></Form.Item></div>
+        <Form.Item label="自定义响应体" extra="填写后优先返回此内容；留空则转发到 Apifox Mock"><div className="response-editor-tools"><Input allowClear onChange={(event) => updateResponseSearch(event.target.value)} onKeyDown={(event) => { if (event.key !== "Enter") return; event.preventDefault(); if (event.shiftKey) moveResponseMatch(-1); else moveResponseMatch(1); }} placeholder="搜索响应内容" value={responseSearch} /><span className="response-match-count">{responseMatchLabel(responseMatchIndex, responseMatchCount)}</span><Tooltip title="上一个匹配"><Button aria-label="上一个匹配" disabled={responseMatchCount === 0} icon={<ChevronUp size={15} />} onClick={() => moveResponseMatch(-1)} size="small" /></Tooltip><Tooltip title="下一个匹配"><Button aria-label="下一个匹配" disabled={responseMatchCount === 0} icon={<ChevronDown size={15} />} onClick={() => moveResponseMatch(1)} size="small" /></Tooltip></div><Input.TextArea autoSize={{ minRows: 8, maxRows: 18 }} placeholder="请输入 JSON 或文本响应内容" ref={responseEditorRef} value={customResponseBody} onChange={(event) => setCustomResponseBody(event.target.value)} /></Form.Item>
       </Form>
     </Drawer>
   );

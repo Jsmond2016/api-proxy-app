@@ -22,6 +22,7 @@ export interface ProxyRule {
   path: string;
   matchMode: MatchMode;
   target: string;
+  customResponseBody: string;
   enabled: boolean;
   tags: string[];
   priority: number;
@@ -145,6 +146,7 @@ export interface RuleInput {
   path: string;
   matchMode: MatchMode;
   target: string;
+  customResponseBody: string;
   enabled: boolean;
   tags: string[];
   priority: number;

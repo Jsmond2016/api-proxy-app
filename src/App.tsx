@@ -1,6 +1,6 @@
-import { Alert, App as AntApp, Button, Empty, Spin } from "antd";
+import { Alert, App as AntApp, Button, Empty, Modal, Spin } from "antd";
 import { AlertCircle, Monitor } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps } from "react";
 import { ApifoxSyncPanel } from "./components/ApifoxSyncPanel";
 import { CertificatePanel } from "./components/CertificatePanel";
@@ -21,6 +21,8 @@ function App() {
   const [error, setError] = useState("");
   const [diagnostics, setDiagnostics] = useState<DiagnosticEntry[]>([]);
   const [appVersion, setAppVersion] = useState(desktop.buildVersion);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+  const allowCloseRef = useRef(false);
 
   useEffect(() => {
     let unsubscribe: () => void = () => undefined;
@@ -29,6 +31,28 @@ function App() {
     void desktop.subscribeProxyEvents(setSnapshot, mergeRequestLog).then((stop) => { unsubscribe = stop; }).catch((reason) => { showError(reason); recordDiagnostic("error", "事件订阅", errorMessage(reason)); });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!desktop.isDesktopRuntime()) return;
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    void import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
+      if (disposed) return;
+      const currentWindow = getCurrentWindow();
+      unlisten = await currentWindow.onCloseRequested((event) => {
+        if (allowCloseRef.current) return;
+        event.preventDefault();
+        setCloseConfirmOpen(true);
+      });
+    });
+    return () => { disposed = true; if (unlisten) unlisten(); };
+  }, []);
+
+  async function confirmClose() {
+    allowCloseRef.current = true;
+    const { getCurrentWindow } = await import("@tauri-apps/api/window");
+    await getCurrentWindow().close();
+  }
 
   async function loadSnapshot() {
     setInitializing(true);
@@ -140,6 +164,10 @@ function App() {
         />
         <DiagnosticPanel entries={diagnostics} onClear={() => setDiagnostics([])} snapshot={snapshot} />
       </section>
+      <Modal cancelText="继续使用" okButtonProps={{ danger: true }} okText="确认关闭" onCancel={() => setCloseConfirmOpen(false)} onOk={() => { void confirmClose(); }} open={closeConfirmOpen} title="关闭 Apifox Proxy？">
+        <p>关闭前请先将微信开发者工具的代理设置还原，否则关闭本应用后请求可能继续指向已停止的代理。</p>
+        <p className="close-guide-path">设置 → 代理设置 → 代理 → 手动设置代理</p>
+      </Modal>
     </main>
   );
 }

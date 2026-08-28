@@ -56,6 +56,8 @@ button {
   margin: 0;
 }
 
+.close-guide-path { margin-top: 12px; color: #365747; font-weight: 700; }
+
 .initialization-error h1 {
   font-size: 18px;
 }

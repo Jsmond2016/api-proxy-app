@@ -112,9 +112,9 @@ button {
 .project-tab-label small { color: #8fb49b; font-size: 11px; }
 .project-tabs-actions { display: flex; align-items: center; gap: 4px; }
 
-.header-brand { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.header-brand { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; line-height: 1; }
 .header-brand .brand-mark { width: 28px; height: 28px; border-color: #8bbca0; color: #e4f1e6; font-size: 17px; }
-.header-brand-name { margin: 0; color: #d9f0df; font-family: "SF Mono", Menlo, monospace; font-size: 13px; font-weight: 800; }
+.header-brand-name { margin: 0; color: #d9f0df; font-family: "SF Mono", Menlo, monospace; font-size: 24px; font-weight: 800; line-height: 1; }
 
 .brand-mark {
   display: grid;
@@ -258,6 +258,8 @@ button {
   border-radius: 6px;
   background: #1c2620;
 }
+
+.proxy-header-content { width: 100%; }
 
 .eyebrow,
 .section-kicker {

@@ -80,6 +80,9 @@ pub async fn delete_profile(
 ) -> Result<DesktopSnapshot, String> {
     let has_active_profile = {
         let mut current = lock_snapshot(&state)?;
+        if current.profiles.len() <= 1 {
+            return Err("至少保留一个联调项目".to_string());
+        }
         let original_len = current.profiles.len();
         current.profiles.retain(|profile| profile.id != profile_id);
         if current.profiles.len() == original_len {

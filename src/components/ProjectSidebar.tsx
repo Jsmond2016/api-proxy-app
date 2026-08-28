@@ -50,12 +50,11 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
   return (
     <header className="project-sidebar">
       <div className="project-tabs-bar">
-        <span className="project-tabs-title">联调项目</span>
         <Tabs activeKey={props.activeProfileId || undefined} items={tabItems} onChange={(id) => { void props.onSelect(id); }} />
         <div className="project-tabs-actions">
           <Tooltip title="新建项目"><Button aria-label="新建项目" className="icon-button" disabled={props.disabled} icon={<FolderPlus size={16} />} onClick={openCreate} type="text" /></Tooltip>
           <Tooltip title="编辑当前项目"><Button aria-label="编辑当前项目" className="icon-button" disabled={!props.activeProfileId || props.disabled} icon={<Pencil size={16} />} onClick={openEdit} type="text" /></Tooltip>
-          <Tooltip title="删除当前项目"><Button aria-label="删除当前项目" className="icon-button danger-utility" danger disabled={!props.activeProfileId || props.disabled} icon={<Trash2 size={16} />} onClick={removeCurrent} type="text" /></Tooltip>
+          <Tooltip title="删除当前项目"><Button aria-label="删除当前项目" className="icon-button danger-utility" danger disabled={!props.activeProfileId || props.disabled || props.profiles.length <= 1} icon={<Trash2 size={16} />} onClick={removeCurrent} type="text" /></Tooltip>
         </div>
       </div>
       <ProfileDialog

@@ -6,7 +6,7 @@
 
 ## 方案概览
 
-本方案对应当前 `0.1.25` 的 Tauri 2 桌面代理实现。React 负责项目、在线 Apifox、Tag、Mock 接口、证书和日志工作台；Rust 负责版本化配置、Apifox OpenAPI 导出、规则编译、HTTP/HTTPS 代理、CA 管理和事件推送。参考交互项目为 `/Users/huangjing/Desktop/MyCode/github/api_proxy_tool_ext`，但桌面版不依赖浏览器扩展。
+本方案对应当前 `0.1.26` 的 Tauri 2 桌面代理实现。React 负责项目、在线 Apifox、Tag、Mock 接口、证书和日志工作台；Rust 负责版本化配置、Apifox OpenAPI 导出、规则编译、HTTP/HTTPS 代理、CA 管理和事件推送。参考交互项目为 `/Users/huangjing/Desktop/MyCode/github/api_proxy_tool_ext`，但桌面版不依赖浏览器扩展。
 
 实现按最小可验证增量推进：先建立真实配置和安全状态模型，再接通 Apifox/Tag，再修复代理匹配与实时事件，最后完成 CA、微信开发者工具和打包验收。任何阶段都不得以静态演示数据代替真实结果。
 
@@ -460,6 +460,7 @@ Content-Type: application/json
 | 2026-08-28 | R26 Mock 接口测试与单接口调试 | 通过（自动视觉检查受限） | `pnpm build`、`pnpm run check:source`、`git diff --check` 通过；当前无可用浏览器连接，未执行桌面点击和真实 Mock 请求人工验收 |
 | 2026-08-28 | 0.1.23 最终交付基线 | 通过 | 最新 DMG 为 `src-tauri/target/release/bundle/dmg/Apifox Proxy_0.1.23_aarch64.dmg`；`hdiutil verify` 通过，SHA-256 `d452af3b8ba71e94e5ac1ad80729c05bfd9eb7b8d299e7cecb6acbda135e6007`；代码级验证沿用前述构建、源码检查、Rust 检查和 E2E 证据 |
 | 2026-08-28 | 0.1.25 关闭确认与安装包修复 | 通过 | 确认关闭前注销 `onCloseRequested` 监听再调用 `Window.close()`；`pnpm package:mac` 使用 staging 目录和 `/Applications` 入口生成安装型 DMG；`hdiutil verify` 通过，SHA-256 `38e501bda60a369e3b5df3350ba12049ce65bb9ed100b35c0bc93c6b668c9f9e` |
+| 2026-08-28 | 0.1.26 修复窗口关闭 ACL | 通过构建验证 | 主窗口 capability 增加 `core:window:allow-close`，保留确认后注销监听再关闭逻辑；DMG 已生成并通过 `hdiutil verify`，SHA-256 `73b577be3a9c4ed84346d5bf77ad18e9b1524b58b4841641817309493fb388e1`；仍需用户在打包应用中人工点击关闭确认窗口退出 |
 | 2026-08-27 | 0.1.9 用户安装验收 | 通过 | 用户确认验证通过并要求提交当前实现 |
 | 2026-08-27 | 微信开发者工具真实项目人工验收 | 待用户执行 | 需要用户的真实源域名、Apifox 项目、Token 和微信开发者工具环境；按 `main-使用与验收文档.md` 验收 |
 # R20 Ant Design UI 迁移方案

@@ -10,7 +10,7 @@
 
 桌面应用参考项目 `/Users/huangjing/Desktop/MyCode/github/api_proxy_tool_ext` 的 Apifox 项目连接、OpenAPI 导出、Tag 筛选、规则生成、接口启停和 Mock Token 处理方式，但网络拦截载体由浏览器扩展的 `declarativeNetRequest` 改为 Tauri + Rust 本地 HTTP/HTTPS 代理。
 
-经过多轮实现、修复、打包和用户验收，当前 `0.1.25` 已形成“配置在线 Apifox 项目 -> 按 Tag 同步接口 -> 微信开发者工具接入本地代理 -> HTTP/HTTPS 请求匹配 -> 转发 Apifox Mock -> 查看实时请求记录”的产品闭环。本文件以最终代码行为为准；早期审查问题仍保留在下文，作为历史记录，不能再视为当前缺陷。
+经过多轮实现、修复、打包和用户验收，当前 `0.1.26` 已形成“配置在线 Apifox 项目 -> 按 Tag 同步接口 -> 微信开发者工具接入本地代理 -> HTTP/HTTPS 请求匹配 -> 转发 Apifox Mock -> 查看实时请求记录”的产品闭环。本文件以最终代码行为为准；早期审查问题仍保留在下文，作为历史记录，不能再视为当前缺陷。
 
 ## 最终产品概览
 

@@ -115,7 +115,6 @@ button {
 .header-brand { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 .header-brand .brand-mark { width: 28px; height: 28px; border-color: #6f9b82; color: #1f5b43; font-size: 17px; }
 .header-brand-name { margin: 0; color: #1f5b43; font-family: "SF Mono", Menlo, monospace; font-size: 13px; font-weight: 800; }
-.header-brand-caption { margin: 2px 0 0; color: #78907f; font-family: "SF Mono", Menlo, monospace; font-size: 8px; }
 
 .brand-mark {
   display: grid;
@@ -253,7 +252,11 @@ button {
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
-  padding-bottom: 30px;
+  margin-bottom: 18px;
+  padding: 18px 22px 20px;
+  border: 1px solid #d9e0d8;
+  border-radius: 6px;
+  background: #e8eee7;
 }
 
 .eyebrow,

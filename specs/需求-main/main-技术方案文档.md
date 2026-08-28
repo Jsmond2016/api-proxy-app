@@ -412,6 +412,8 @@ Content-Type: application/json
 | 2026-08-28 | 用户通过 `ac` 确认并完成 R36-R38 | R36-R38 | GPT-5 Codex | 真机模拟提示词增加删除 TODO 与禁止提交约束；请求记录空状态改为紧凑展示；代理标题移到 Tabs 前并移除当前项目提示 |
 | 2026-08-28 | 提议 R39：优化顶部品牌层级、Tooltip 换行和规则区按钮视觉 | 调整 `ProxyHeader`/项目导航的结构与背景，使用 Tooltip React 内容实现分点提示，统一 Apifox/添加接口主按钮和重置危险按钮样式，并扩大搜索框最小宽度 | R39 | GPT-5 Codex |
 | 2026-08-28 | 提议 R40：合并规则表接口信息与请求列 | `RuleTable` 仅保留接口信息、Mock 目标、操作等必要列；接口信息单元格复用 URL 外链，按名称和 `method + path` 两行布局；匹配模式/优先级仍保留在编辑数据中但不在表格单独展示 | R40 | GPT-5 Codex |
+| 2026-08-28 | 提议 R41：恢复顶部标题背景并移除品牌副标题 | 为 `proxy-header` 增加浅色背景/边界层级，删除 `WECHAT DEVTOOLS` 文案，修正 R39 视觉回归 | R41 | GPT-5 Codex |
+| 2026-08-28 | 完成 R41 | R41 | GPT-5 Codex | 代理标题恢复浅色背景卡片层级；APIFOX PROXY 仅保留品牌文案并移除 WECHAT DEVTOOLS 副标题 |
 | 2026-08-28 | 完成 R40 | R40 | GPT-5 Codex | 删除请求/匹配独立列，接口信息列按中文名称与 Method+URL 两行展示，保留 URL 外链 |
 | 2026-08-28 | 用户通过 `ac` 确认并完成 R39 | R39 | GPT-5 Codex | 品牌文案并入代理标题行，项目 Tabs 改为浅色背景；Tooltip 分点换行；搜索框扩宽；Apifox/重置按钮分别统一主色/危险色 |
 

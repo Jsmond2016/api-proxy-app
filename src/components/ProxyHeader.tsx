@@ -11,7 +11,7 @@ export function ProxyHeader({ status, globalMockEnabled }: ProxyHeaderProps) {
   return (
     <header className="proxy-header">
       <div className="proxy-header-content">
-        <div className="proxy-title-row"><div className="header-brand"><div className="brand-mark">A</div><div><p className="header-brand-name">APIFOX PROXY</p><p className="header-brand-caption">WECHAT DEVTOOLS</p></div></div><h1>微信开发者工具代理</h1><Badge className={statusClass(status)} status={badgeStatus(status)} text={status} /></div>
+        <div className="proxy-title-row"><div className="header-brand"><div className="brand-mark">A</div><p className="header-brand-name">APIFOX PROXY</p></div><h1>微信开发者工具代理</h1><Badge className={statusClass(status)} status={badgeStatus(status)} text={status} /></div>
         <p>{statusCopy(status, globalMockEnabled)}</p>
       </div>
     </header>

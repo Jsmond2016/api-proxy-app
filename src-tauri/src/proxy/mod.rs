@@ -525,6 +525,17 @@ pub async fn ensure_proxy_running(
     start_proxy(app, state).await
 }
 
+pub async fn restart_proxy(app: &AppHandle, state: &AppState) -> Result<DesktopSnapshot, String> {
+    if proxy_is_running(state)? {
+        stop_proxy(app, state)?;
+        sleep(Duration::from_millis(100)).await;
+    }
+    if active_profile(state).is_err() {
+        return snapshot(state);
+    }
+    start_proxy(app, state).await
+}
+
 pub fn proxy_is_running(state: &AppState) -> Result<bool, String> {
     state
         .proxy_runtime

@@ -367,20 +367,23 @@ pub fn set_rule_enabled(
 }
 
 #[tauri::command]
-pub fn set_global_mock_enabled(
+pub async fn set_global_mock_enabled(
+    app: AppHandle,
     profile_id: String,
     enabled: bool,
     state: State<'_, AppState>,
 ) -> Result<DesktopSnapshot, String> {
-    let mut current = lock_snapshot(&state)?;
-    let profile = current
-        .profiles
-        .iter_mut()
-        .find(|profile| profile.id == profile_id)
-        .ok_or_else(|| "profile was not found".to_string())?;
-    profile.global_mock_enabled = enabled;
-    state.persist(&current)?;
-    Ok(current.clone())
+    {
+        let mut current = lock_snapshot(&state)?;
+        let profile = current
+            .profiles
+            .iter_mut()
+            .find(|profile| profile.id == profile_id)
+            .ok_or_else(|| "profile was not found".to_string())?;
+        profile.global_mock_enabled = enabled;
+        state.persist(&current)?;
+    }
+    proxy::restart_proxy(&app, &state).await
 }
 
 #[tauri::command]

@@ -205,7 +205,7 @@ interface WorkspaceProps {
 
 function Workspace(props: WorkspaceProps) {
   const profile = props.activeProfile;
-  if (!profile) return <EmptyWorkspace />;
+  if (!profile) return <><ProjectSidebar {...props.projectNavigation} /><EmptyWorkspace /></>;
   const currentProfile = profile;
   async function debugSingle(ruleId: string) {
     await props.apply(desktop.setGlobalMockEnabled(currentProfile.id, true), "开启全局 Mock");
@@ -236,7 +236,7 @@ function Workspace(props: WorkspaceProps) {
 }
 
 function EmptyWorkspace() {
-  return <section className="empty-workspace"><Empty image={<Monitor size={36} />} description={<><h1>创建第一个联调项目</h1><p>点击左侧项目标题旁的新增图标，配置小程序真实接口域名和本地代理端口。</p></>} /></section>;
+  return <section className="empty-workspace"><Empty image={<Monitor size={36} />} description={<><h1>创建第一个联调项目</h1><p>点击上方“新建项目”按钮，配置小程序真实接口域名和本地代理端口。</p></>} /></section>;
 }
 
 function RuntimeNotice() {

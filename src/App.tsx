@@ -128,7 +128,7 @@ function App() {
       <ProjectSidebar
         activeProfileId={snapshot.activeProfileId}
         appVersion={appVersion}
-        disabled={snapshot.proxyStatus === "running"}
+        disabled={snapshot.proxyStatus === "starting"}
         profiles={snapshot.profiles}
         onCreate={(input) => apply(desktop.createProfile(input), "创建项目")}
         onDelete={(id) => apply(desktop.deleteProfile(id), "删除项目")}
@@ -171,7 +171,7 @@ function Workspace(props: WorkspaceProps) {
   if (!profile) return <EmptyWorkspace />;
   return (
     <>
-      <ProxyHeader profile={profile} status={props.snapshot.proxyStatus} onStart={() => props.apply(desktop.startProxy(), "启动代理")} onStop={() => props.apply(desktop.stopProxy(), "停止代理")} />
+      <ProxyHeader globalMockEnabled={profile.globalMockEnabled} profile={profile} status={props.snapshot.proxyStatus} />
       <div className="workspace-grid">
         <ConnectionGuide certificate={props.snapshot.certificate} hasTraffic={props.snapshot.logs.length > 0} profile={profile} proxyStatus={props.snapshot.proxyStatus} />
         <div className="workspace-config-actions">

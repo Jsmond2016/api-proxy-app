@@ -19,6 +19,7 @@ use regex::Regex;
 use tauri::{AppHandle, Emitter};
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
+use tokio::time::{sleep, Duration};
 use url::Url;
 
 use crate::model::{
@@ -241,7 +242,39 @@ impl RuleProxyHandler {
     }
 }
 
+impl RuleProxyHandler {
+    fn mock_enabled(&self) -> bool {
+        let Ok(snapshot) = self.snapshot.lock() else {
+            return false;
+        };
+        snapshot
+            .profiles
+            .iter()
+            .find(|profile| profile.id == self.profile_id)
+            .map(|profile| profile.global_mock_enabled)
+            .unwrap_or(false)
+    }
+}
+
 impl HttpHandler for RuleProxyHandler {
+    fn should_intercept_connect(
+        &mut self,
+        _context: &HttpContext,
+        _request: &Request<Body>,
+    ) -> impl Future<Output = bool> + Send {
+        let intercept = self.mock_enabled();
+        async move { intercept }
+    }
+
+    fn should_intercept_tls(
+        &mut self,
+        _context: &HttpContext,
+        _client_hello: hudsucker::rustls::server::ClientHello<'_>,
+    ) -> impl Future<Output = bool> + Send {
+        let intercept = self.mock_enabled();
+        async move { intercept }
+    }
+
     fn handle_request(
         &mut self,
         _context: &HttpContext,
@@ -365,6 +398,7 @@ pub async fn start_proxy(app: &AppHandle, state: &AppState) -> Result<DesktopSna
         *runtime = Some(ProxyRuntime {
             shutdown: shutdown_sender,
             profile_id: profile.id.clone(),
+            port: profile.port,
             mock_token: runtime_mock_token,
         });
     }
@@ -415,6 +449,39 @@ pub fn stop_proxy(app: &AppHandle, state: &AppState) -> Result<DesktopSnapshot, 
     }
     set_proxy_status(app, state, ProxyStatus::Stopped);
     snapshot(state)
+}
+
+pub async fn ensure_proxy_running(
+    app: &AppHandle,
+    state: &AppState,
+) -> Result<DesktopSnapshot, String> {
+    let desired = active_profile(state)?;
+    let same_listener = {
+        let current_runtime = state
+            .proxy_runtime
+            .lock()
+            .map_err(|_| "proxy runtime is unavailable".to_string())?;
+        current_runtime
+            .as_ref()
+            .map(|runtime| runtime.profile_id == desired.id && runtime.port == desired.port)
+            .unwrap_or(false)
+    };
+    if same_listener {
+        return snapshot(state);
+    }
+    if proxy_is_running(state)? {
+        stop_proxy(app, state)?;
+        sleep(Duration::from_millis(100)).await;
+    }
+    start_proxy(app, state).await
+}
+
+pub fn proxy_is_running(state: &AppState) -> Result<bool, String> {
+    state
+        .proxy_runtime
+        .lock()
+        .map(|runtime| runtime.is_some())
+        .map_err(|_| "proxy runtime is unavailable".to_string())
 }
 
 fn active_profile(state: &AppState) -> Result<ProjectProfile, String> {

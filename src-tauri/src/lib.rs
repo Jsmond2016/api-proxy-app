@@ -11,7 +11,7 @@ use commands::{
     sync_apifox, update_profile, validate_apifox,
 };
 use state::AppState;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -20,6 +20,20 @@ pub fn run() {
             let data_directory = app.path().app_data_dir()?;
             let state = AppState::load(data_directory)?;
             app.manage(state);
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let state = handle.state::<AppState>();
+                let has_active_profile = state
+                    .snapshot
+                    .lock()
+                    .map(|snapshot| snapshot.active_profile_id.is_some())
+                    .unwrap_or(false);
+                if has_active_profile {
+                    if let Err(error) = crate::proxy::ensure_proxy_running(&handle, &state).await {
+                        let _ = handle.emit("proxy://startup-error", error);
+                    }
+                }
+            });
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())

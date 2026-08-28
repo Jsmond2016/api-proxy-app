@@ -29,6 +29,7 @@ pub struct AppState {
 pub struct ProxyRuntime {
     pub shutdown: oneshot::Sender<()>,
     pub profile_id: String,
+    pub port: u16,
     pub mock_token: Arc<Mutex<Option<String>>>,
 }
 
@@ -62,6 +63,9 @@ impl AppState {
         snapshot.schema_version = CURRENT_SCHEMA_VERSION;
         snapshot.proxy_status = ProxyStatus::Stopped;
         snapshot.logs.clear();
+        for profile in &mut snapshot.profiles {
+            profile.global_mock_enabled = false;
+        }
         snapshot.certificate = certificate_status(&certificate_directory);
 
         let state = Self {
@@ -397,6 +401,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{AppState, DesktopSnapshot, ProxyRuntime};
+    use crate::model::{ApifoxConnection, ProjectProfile};
     use tokio::sync::oneshot;
 
     fn temporary_directory(name: &str) -> std::path::PathBuf {
@@ -435,6 +440,34 @@ mod tests {
     }
 
     #[test]
+    fn application_load_disables_mock_for_safe_passthrough_start() {
+        let directory = temporary_directory("apifox-proxy-safe-start");
+        {
+            let state = AppState::load(directory.clone()).expect("state should initialize");
+            let mut snapshot = DesktopSnapshot::default();
+            snapshot.active_profile_id = Some("profile".to_string());
+            snapshot.profiles.push(ProjectProfile {
+                id: "profile".to_string(),
+                name: "Profile".to_string(),
+                source_hosts: vec!["api.example.test".to_string()],
+                path_prefix: String::new(),
+                port: 8899,
+                apifox: ApifoxConnection::default(),
+                synced_tags: vec!["tag".to_string()],
+                active_tags: vec!["tag".to_string()],
+                global_mock_enabled: true,
+                rules: Vec::new(),
+            });
+            state.persist(&snapshot).expect("state should persist");
+        }
+        let reloaded = AppState::load(directory.clone()).expect("state should reload");
+        let snapshot = reloaded.snapshot.lock().expect("state should unlock");
+        assert!(!snapshot.profiles[0].global_mock_enabled);
+        drop(snapshot);
+        fs::remove_dir_all(directory).expect("temporary state should be removed");
+    }
+
+    #[test]
     fn updates_mock_token_for_running_profile_only() {
         let directory = temporary_directory("apifox-proxy-runtime-token");
         let state = AppState::load(directory.clone()).expect("state should initialize");
@@ -443,6 +476,7 @@ mod tests {
         *state.proxy_runtime.lock().expect("runtime should unlock") = Some(ProxyRuntime {
             shutdown,
             profile_id: "profile-a".to_string(),
+            port: 8899,
             mock_token: Arc::clone(&mock_token),
         });
 

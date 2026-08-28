@@ -1,4 +1,4 @@
-import { Alert, Button, Form, Input, List, Modal, Segmented, Select } from "antd";
+import { Alert, Button, Form, Input, List, Modal, Select } from "antd";
 import { CloudDownload, KeyRound, Link2, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ApifoxPreview, ApifoxRequest, ProjectProfile } from "../types";
@@ -10,9 +10,7 @@ interface ApifoxSyncPanelProps {
 }
 
 export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
-  const [mode, setMode] = useState(props.profile.apifox.mode);
   const [projectId, setProjectId] = useState(props.profile.apifox.projectId);
-  const [localUrl, setLocalUrl] = useState(props.profile.apifox.localOpenapiUrl);
   const [mockPrefix, setMockPrefix] = useState(props.profile.apifox.mockPrefix);
   const [accessToken, setAccessToken] = useState(props.profile.apifox.accessToken);
   const [mockToken, setMockToken] = useState(props.profile.apifox.mockToken);
@@ -24,9 +22,7 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    setMode(props.profile.apifox.mode);
     setProjectId(props.profile.apifox.projectId);
-    setLocalUrl(props.profile.apifox.localOpenapiUrl);
     setMockPrefix(props.profile.apifox.mockPrefix);
     setSelectedTags(props.profile.syncedTags);
     setAvailableTags([]);
@@ -36,12 +32,21 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
     setPreview(null);
   }, [props.profile.id]);
 
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
   function request(): ApifoxRequest {
     const value: ApifoxRequest = {
       profileId: props.profile.id,
-      mode,
+      mode: "online",
       projectId: projectId.trim(),
-      localOpenapiUrl: localUrl.trim(),
+      localOpenapiUrl: "",
       mockPrefix: mockPrefix.trim(),
       selectedTags,
     };
@@ -64,7 +69,7 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
       const result = await props.onValidate(discoveryRequest);
       setAvailableTags(result.availableTags);
       setSelectedTags((current) => current.filter((tag) => result.availableTags.includes(tag)));
-      if (mode === "online" && !mockPrefix.trim()) {
+      if (!mockPrefix.trim()) {
         setMockPrefix(`https://m1.apifoxmock.com/m1/${projectId.trim()}-0-default`);
       }
       setValidated(true);
@@ -102,18 +107,17 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
   return (
     <>
       <Button className="config-entry-button" icon={<RefreshCw size={15} />} onClick={() => setOpen(true)}>{apifoxEntryLabel(props.profile)}</Button>
-      <Modal className="apifox-sync-modal" footer={null} onCancel={() => setOpen(false)} open={open} title="连接并同步 Apifox 接口" width={720}>
-        <section className="apifox-sync-panel">
+      <Modal className="apifox-sync-modal" footer={null} modalRender={(node) => <div onWheel={(event) => event.stopPropagation()}>{node}</div>} onCancel={() => setOpen(false)} open={open} title="连接并同步 Apifox 接口" width={680}>
+        <section className="apifox-sync-panel apifox-modal-scroll" onWheel={(event) => event.stopPropagation()}>
           <div className="apifox-panel-head">
-            <div><span>APIFOX OPENAPI</span><strong>连接配置</strong></div>
-            <Segmented className="sync-mode" onChange={(value) => { setMode(value as "online" | "local"); invalidate(); }} options={[{ label: "在线项目", value: "online" }, { label: "本地 URL", value: "local" }]} value={mode} />
+            <div><span>APIFOX OPENAPI</span><strong>在线项目配置</strong></div>
           </div>
           <Form className="apifox-form" layout="vertical" requiredMark={false}>
-            <SourceField localUrl={localUrl} mode={mode} projectId={projectId} setLocalUrl={(value) => { setLocalUrl(value); invalidate(); }} setProjectId={(value) => { setProjectId(value); invalidate(); }} />
-            <Form.Item label={<span><Link2 size={13} />Mock 前缀</span>}><Input placeholder="留空则按项目 ID 生成" value={mockPrefix} onChange={(event) => { setMockPrefix(event.target.value); invalidate(); }} /></Form.Item>
+            <Form.Item label={<span><Link2 size={13} />项目 ID</span>} required><Input placeholder="请输入 Apifox 项目 ID" value={projectId} onChange={(event) => { setProjectId(event.target.value); invalidate(); }} /></Form.Item>
+            <Form.Item label={<span><Link2 size={13} />Mock 前缀</span>}><Input placeholder="留空则按项目 ID 自动生成" value={mockPrefix} onChange={(event) => { setMockPrefix(event.target.value); invalidate(); }} /></Form.Item>
             <Form.Item label={<span><KeyRound size={13} />Access Token</span>}><Input.Password placeholder="可选" value={accessToken} onChange={(event) => { setAccessToken(event.target.value); invalidate(); }} /></Form.Item>
-            <Form.Item label={<span><KeyRound size={13} />Mock Token</span>}><Input.Password placeholder="可选" value={mockToken} onChange={(event) => setMockToken(event.target.value)} /></Form.Item>
-            <div className="apifox-form-actions"><Button className="outline-button" loading={busy} onClick={validateConnection}>验证连接</Button></div>
+            <Form.Item label={<span><KeyRound size={13} />Mock Token</span>}><Input.Password placeholder="可选，用于 Apifox Mock 鉴权" value={mockToken} onChange={(event) => { setMockToken(event.target.value); invalidate(); }} /></Form.Item>
+            <div className="apifox-form-actions"><Button className="outline-button" loading={busy} onClick={validateConnection} type="primary">验证连接</Button></div>
           </Form>
           <ConnectionResult availableTags={availableTags} busy={busy} selectedTags={selectedTags} validated={validated} onConfirm={confirmTags} onTags={changeTags} />
           <InterfacePreviewPanel busy={busy} preview={preview} onApply={applySync} />
@@ -161,7 +165,5 @@ function InterfacePreviewPanel(props: { preview: ApifoxPreview | null; busy: boo
   );
 }
 
-interface SourceFieldProps { mode: "online" | "local"; projectId: string; localUrl: string; setProjectId: (value: string) => void; setLocalUrl: (value: string) => void; }
-function SourceField(props: SourceFieldProps) { if (props.mode === "online") return <Form.Item label={<span><Link2 size={13} />项目 ID</span>} required><Input value={props.projectId} onChange={(event) => props.setProjectId(event.target.value)} /></Form.Item>; return <Form.Item label={<span><Link2 size={13} />OpenAPI URL</span>} required><Input value={props.localUrl} onChange={(event) => props.setLocalUrl(event.target.value)} /></Form.Item>; }
 function PreviewRemainder({ total }: { total: number }) { if (total <= 8) return null; return <small className="preview-remainder">另有 {total - 8} 个接口将在确认后同步</small>; }
 function apifoxEntryLabel(profile: ProjectProfile) { if (profile.syncedTags.length > 0) return `Apifox 接口 · ${profile.rules.filter((rule) => rule.source === "apifox").length} 条`; return "连接 Apifox"; }

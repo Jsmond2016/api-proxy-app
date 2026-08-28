@@ -67,7 +67,7 @@ pnpm tauri build
 
 ```text
 src-tauri/target/release/bundle/macos/Apifox Proxy.app
-src-tauri/target/release/bundle/dmg/Apifox Proxy_0.1.9_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Apifox Proxy_0.1.11_aarch64.dmg
 ```
 
 详细配置、微信开发者工具接入和验收步骤见 [使用与验收文档](specs/需求-main/main-使用与验收文档.md)。问题审查和完整方案见 [需求文档](specs/需求-main/main-需求文档.md) 与 [技术方案](specs/需求-main/main-技术方案文档.md)。

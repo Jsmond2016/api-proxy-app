@@ -71,6 +71,8 @@ Rust Application Services
 | R21 | `ProxyHeader` 删除重复地址块；新增紧凑的配置操作条，使用 `Button` 展示 Apifox 连接摘要和 CA 信任摘要；`ApifoxSyncPanel` 与 `CertificatePanel` 改为受控 `Modal`，内部保留全部原有字段、验证、预览、同步及证书命令；`ConnectionGuide` 继续作为唯一代理地址与接入状态区；关闭弹框不清除 Profile 已保存字段，切换 Profile 时按现有逻辑重置为对应配置 | `App.tsx`、`ProxyHeader.tsx`、`ApifoxSyncPanel.tsx`、`CertificatePanel.tsx`、`ConnectionGuide.tsx`、`App.css` | GPT-5 Codex | 前端构建、源码约束、弹框开关/回显/操作源码检查、桌面与窄视口布局检查、Rust 回归 | 已确认 |
 | R22 | 统一规则区用户文案为“Mock 接口”；新增 `resolve_openapi_operation` 或等价 Tauri command，复用在线/本地 OpenAPI 获取与解析逻辑，按规范化 URL pathname、Method 执行精确优先和唯一模糊匹配并返回规则输入字段；新增接口 Drawer/Modal 以空值初始化，URL 第一项在 blur 时调用解析，唯一命中后回填，歧义/未命中使用 `message` 提示；编辑保持现有值回显 | `apifox.rs`、`commands.rs`、`lib.rs`、`model.rs`、`desktop.ts`、`types.ts`、`RuleTable.tsx`、测试 | GPT-5 Codex | 解析精确/模糊/歧义/未命中/Token 目标测试、前端构建、源码约束、表单初始化与回填交互检查、HTTP/HTTPS 回归 | 已确认 |
 | R23 | 将 `ApifoxSyncPanel` 的 Ant Design `Form` 调整为纵向单列，每个字段和验证操作独占一行并收窄弹框宽度；通过桌面 API 读取 Tauri 应用版本，Web 预览使用由 Vite 从 `package.json` 注入的构建期版本回退值，传入 `ProjectSidebar` 后在品牌标题右侧低权重展示；将 `App` 的接入区改为上下两行，第一行保留 `ConnectionGuide`，第二行单独排列 Apifox 与证书入口 | `vite.config.ts`、`desktop.ts`、`App.tsx`、`ProjectSidebar.tsx`、`ApifoxSyncPanel.tsx`、`App.css` | GPT-5 Codex | 前端构建、源码约束、版本来源扫描、桌面与窄视口布局检查、Rust 回归 | 已确认 |
+| R24 | 在 `AppState::load` 将所有 Profile 的 `global_mock_enabled` 重置为 `false` 并持久化安全启动状态；Tauri `setup` 完成状态注册后，若存在活动 Profile 则异步启动 loopback listener；将代理启停能力收敛为内部生命周期服务，Profile 创建、切换、活动端口修改和活动 Profile 删除通过统一 restart/ensure-running 流程切换监听，移除 `ensure_proxy_stopped` 对用户配置操作的阻断；`RuleProxyHandler` 继续在 `global_mock_enabled=false` 时直接 miss 并透传，开启后才匹配启用规则；删除 `ProxyHeader` 手动启停按钮和前端 start/stop 回调，改为展示“端口监听中 · 全量透传/按规则 Mock”状态，保留规则区“全局 Mock”Switch 作为唯一业务开关；无 Profile 时保持无监听，绑定失败进入 error 并在初始化/诊断区明确提示；版本升级至 0.1.10 | `state.rs`、`proxy/mod.rs`、`commands.rs`、`lib.rs`、`App.tsx`、`ProxyHeader.tsx`、`ConnectionGuide.tsx`、`RequestLogPanel.tsx`、`desktop.ts`、测试、文档和版本文件 | GPT-5 Codex | Rust 启动自动监听测试、启动强制透传测试、HTTP/HTTPS 透传与 Mock E2E、全局开关状态保持测试、Profile/端口切换自动重启测试、端口冲突错误测试、前端构建与源码约束、0.1.10 DMG 安装验收 | 已确认 |
+| R25 | 将 `ApifoxSyncPanel` 收敛为在线项目专用弹框，移除 Local 模式分支和本地 URL 字段；参照 `api_proxy_tool_ext` 的在线配置分区与操作顺序重排 `Form`、Tag 发现/确认和接口预览；Modal 使用独立滚动 body，设置 `overscroll-behavior: contain`、阻止滚轮事件冒泡并在弹框打开时锁定页面滚动，避免外层 workspace 响应滚轮 | `ApifoxSyncPanel.tsx`、`App.tsx`、`App.css`、`types.ts`（如清理 Local 契约）、参考项目交互映射文档 | GPT-5 Codex | 在线模式表单/验证/Tag/预览/同步交互源码检查；Modal 内滚动与页面滚动隔离测试；前端构建、源码约束和桌面窄视口验收 | 已确认 |
 | R12 | 建立 Rust 单元/集成、前端测试和本地双 upstream E2E；更新 README/使用文档；构建并校验 arm64 app/dmg | tests、scripts、docs、Tauri bundle | GPT-5 Codex | `pnpm build`、`check:source`、`cargo test`、E2E、codesign、hdiutil | 已确认 |
 
 ## 数据模型设计
@@ -387,6 +389,12 @@ Content-Type: application/json
 | 2026-08-27 | 提议 R23：Apifox 连接表单改为纵向单列；侧栏品牌标题旁展示桌面应用构建版本；Apifox 与证书入口移到接入检查下方独立一行 | R21、R23 | GPT-5 Codex | 仅调整前端布局和版本读取，不改变同步、证书或代理契约；等待确认 |
 | 2026-08-27 | 用户通过 `ac` 确认 R23，开始调整连接弹框、侧栏版本展示和接入区层级 | R23 | GPT-5 Codex | 版本以桌面 API 为准，Web 预览使用同一构建版本回退值 |
 | 2026-08-27 | 完成 R23：Apifox 连接弹框收窄为 720px，连接来源、Mock 前缀、两个 Token 和验证操作改为纵向单列；侧栏品牌标题右侧展示 Tauri 应用版本，Vite 从 `package.json` 注入预览回退版本；接入检查与 Apifox/HTTPS 证书入口拆分为上下两行 | R12、R21、R23 | GPT-5 Codex | 不改变连接、同步、证书和代理回调；Tag 验证区允许换行；版本升级 0.1.9 |
+| 2026-08-27 | 提议 R24：应用在有活动 Profile 时自动监听代理端口，每次启动强制关闭全局 Mock 并透传；规则区全局 Switch 成为唯一 Mock 开关，顶部移除手动启停；Profile 与端口变化自动切换 listener | R7、R9、R14、R21、R24 | GPT-5 Codex | 解决应用已打开但端口未监听导致微信开发者工具全请求失败的问题；涉及启动默认值和监听生命周期变更，等待确认 |
+| 2026-08-28 | 用户通过 `ac` 确认 R24，开始实现自动监听与安全透传启动 | R24 | GPT-5 Codex | 自动监听与用户配置命令解耦；HTTPS 透传通过 handler 的 CONNECT/TLS 拦截策略实现 |
+| 2026-08-28 | 完成 R24：应用启动自动监听活动 Profile；启动时重置全局 Mock 为关闭；Profile 创建/切换/编辑/删除自动重启或停止监听；HTTPS 关闭 Mock 时直通 CONNECT/TLS；移除顶部手动启停 UI | R7、R9、R14、R21、R24 | GPT-5 Codex | 新增运行实例端口标识和安全启动测试；版本升级 0.1.10 |
+| 2026-08-28 | 提议 R25：在线模式专用 Apifox 弹框与滚轮隔离 | R21、R22、R23、R25 | GPT-5 Codex | 仅改变前端配置交互与滚动容器，不改变 Apifox API、Token 或代理契约；等待确认 |
+| 2026-08-28 | 用户通过 `ac` 确认 R25，开始实施在线模式弹框和滚轮隔离 | R25 | GPT-5 Codex | 前端固定在线请求契约；保留 Rust `mode` 字段兼容性并传空本地 URL |
+| 2026-08-28 | 完成 R25：移除 Local 模式选择和本地 URL 字段；在线项目、Mock 前缀、两个 Token、验证、Tag 选择、预览和同步按参考项目顺序呈现；Modal 内容及外层统一阻止滚轮冒泡，打开时锁定 body 滚动 | R21、R22、R23、R25 | GPT-5 Codex | 不改变同步 API、Token 传递和既有 Profile 配置回显 |
 
 ## 验证结果
 
@@ -413,6 +421,8 @@ Content-Type: application/json
 | 2026-08-27 | 0.1.7 本地安装包 | 通过 | arm64，包内短版本与构建版本均为 0.1.7；ad-hoc 签名通过 `codesign --verify --deep --strict`；DMG 通过 `hdiutil verify`；SHA-256 `bad3ffb9ff5437fcb1061c26e74ed7c3bfcc79fca2a9742cd1598ec4cdbfd3fd` |
 | 2026-08-27 | R23 连接配置布局与应用版本展示 | 通过（自动视觉检查受限） | `pnpm build`、`pnpm run check:source`、`cargo check`、`cargo fmt --check`、`git diff --check` 通过；Rust 26 项测试全部通过，包含 HTTP/HTTPS E2E；源码确认表单单列、配置入口分行、版本来自 Tauri API 和构建注入；本地预览运行于 `http://127.0.0.1:1420/`，当前无可用浏览器连接，未执行自动截图与点击验收 |
 | 2026-08-27 | 0.1.9 本地安装包 | 通过 | arm64，DMG 内 `.app` 短版本与构建版本均为 0.1.9；ad-hoc 签名通过 `codesign --verify --deep --strict`；DMG 通过 `hdiutil verify`；SHA-256 `fae70368fa1c9576edccb721f32c6773c5b62eef438b0af7907919e5896358f5` |
+| 2026-08-28 | R24 自动监听与安全透传 | 通过 | Rust 27 项测试全部通过；`pnpm build`、`pnpm run check:source`、`cargo check`、`cargo fmt --check`、`git diff --check` 通过；新增启动重置全局 Mock 测试，HTTP/HTTPS E2E 回归通过 |
+| 2026-08-28 | R25 在线弹框与滚轮隔离 | 通过（自动视觉检查受限） | `pnpm build`、`pnpm run check:source`、`cargo check`、`cargo fmt --check`、`git diff --check` 通过；当前无可用浏览器连接，未执行自动截图与滚轮人工验收 |
 | 2026-08-27 | 0.1.9 用户安装验收 | 通过 | 用户确认验证通过并要求提交当前实现 |
 | 2026-08-27 | 微信开发者工具真实项目人工验收 | 待用户执行 | 需要用户的真实源域名、Apifox 项目、Token 和微信开发者工具环境；按 `main-使用与验收文档.md` 验收 |
 # R20 Ant Design UI 迁移方案

@@ -38,4 +38,4 @@ function ruleName(log: RequestLog) { if (log.ruleName) return log.ruleName; retu
 function responseCode(log: RequestLog) { if (log.responseCode !== null) return String(log.responseCode); return "--"; }
 function statusClass(status: RequestLog["status"]) { return `log-status log-status-${status}`; }
 function statusLabel(status: RequestLog["status"]) { if (status === "matched") return "已 Mock"; if (status === "failed") return "失败"; return "透传"; }
-function EmptyLogs({ count }: { count: number }) { if (count > 0) return null; return <Empty className="empty-rules" description="暂无请求。启动代理并在微信开发者工具中配置代理后，这里会实时更新。" image={Empty.PRESENTED_IMAGE_SIMPLE} />; }
+function EmptyLogs({ count }: { count: number }) { if (count > 0) return null; return <Empty className="empty-rules" description="暂无请求。应用打开并在微信开发者工具中配置代理后，这里会实时更新。" image={Empty.PRESENTED_IMAGE_SIMPLE} />; }

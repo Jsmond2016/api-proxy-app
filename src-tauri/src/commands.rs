@@ -9,8 +9,8 @@ use crate::apifox::{
 };
 use crate::model::{
     ApifoxConnection, ApifoxMode, ApifoxPreview, ApifoxRequest, DesktopSnapshot, InterfacePreview,
-    MatchMode, OperationResolution, ProfileInput, ProjectProfile, ProxyRule, ProxyStatus,
-    ResolveOperationInput, ResolvedInterface, RuleInput, RuleSource,
+    MatchMode, OperationResolution, ProfileInput, ProjectProfile, ProxyRule, ResolveOperationInput,
+    ResolvedInterface, RuleInput, RuleSource,
 };
 use crate::proxy;
 use crate::state::AppState;
@@ -22,82 +22,100 @@ pub fn get_snapshot(state: State<'_, AppState>) -> Result<DesktopSnapshot, Strin
 }
 
 #[tauri::command]
-pub fn create_profile(
+pub async fn create_profile(
+    app: AppHandle,
     input: ProfileInput,
     state: State<'_, AppState>,
 ) -> Result<DesktopSnapshot, String> {
     let profile = build_profile(input)?;
-    let mut current = lock_snapshot(&state)?;
-    if current.profiles.iter().any(|item| item.id == profile.id) {
-        return Err("profile ID already exists".to_string());
+    {
+        let mut current = lock_snapshot(&state)?;
+        if current.profiles.iter().any(|item| item.id == profile.id) {
+            return Err("profile ID already exists".to_string());
+        }
+        current.active_profile_id = Some(profile.id.clone());
+        current.profiles.push(profile);
+        state.persist(&current)?;
     }
-    current.active_profile_id = Some(profile.id.clone());
-    current.profiles.push(profile);
-    state.persist(&current)?;
-    Ok(current.clone())
+    proxy::ensure_proxy_running(&app, &state).await
 }
 
 #[tauri::command]
-pub fn update_profile(
+pub async fn update_profile(
+    app: AppHandle,
     input: ProfileInput,
     state: State<'_, AppState>,
 ) -> Result<DesktopSnapshot, String> {
-    ensure_proxy_stopped(&state)?;
     let id = input
         .id
         .clone()
         .ok_or_else(|| "profile ID is required".to_string())?;
     let validated = validate_profile_input(&input)?;
-    let mut current = lock_snapshot(&state)?;
-    let profile = current
-        .profiles
-        .iter_mut()
-        .find(|profile| profile.id == id)
-        .ok_or_else(|| "profile was not found".to_string())?;
-    profile.name = validated.0;
-    profile.source_hosts = validated.1;
-    profile.path_prefix = validated.2;
-    profile.port = input.port;
-    state.persist(&current)?;
-    Ok(current.clone())
+    let (is_active, snapshot) = {
+        let mut current = lock_snapshot(&state)?;
+        let profile = current
+            .profiles
+            .iter_mut()
+            .find(|profile| profile.id == id)
+            .ok_or_else(|| "profile was not found".to_string())?;
+        profile.name = validated.0;
+        profile.source_hosts = validated.1;
+        profile.path_prefix = validated.2;
+        profile.port = input.port;
+        let is_active = current.active_profile_id.as_deref() == Some(id.as_str());
+        state.persist(&current)?;
+        (is_active, current.clone())
+    };
+    if is_active {
+        return proxy::ensure_proxy_running(&app, &state).await;
+    }
+    Ok(snapshot)
 }
 
 #[tauri::command]
-pub fn delete_profile(
+pub async fn delete_profile(
+    app: AppHandle,
     profile_id: String,
     state: State<'_, AppState>,
 ) -> Result<DesktopSnapshot, String> {
-    ensure_proxy_stopped(&state)?;
-    let mut current = lock_snapshot(&state)?;
-    let original_len = current.profiles.len();
-    current.profiles.retain(|profile| profile.id != profile_id);
-    if current.profiles.len() == original_len {
-        return Err("profile was not found".to_string());
+    let has_active_profile = {
+        let mut current = lock_snapshot(&state)?;
+        let original_len = current.profiles.len();
+        current.profiles.retain(|profile| profile.id != profile_id);
+        if current.profiles.len() == original_len {
+            return Err("profile was not found".to_string());
+        }
+        if current.active_profile_id.as_deref() == Some(profile_id.as_str()) {
+            current.active_profile_id = current.profiles.first().map(|profile| profile.id.clone());
+        }
+        state.persist(&current)?;
+        current.active_profile_id.is_some()
+    };
+    if has_active_profile {
+        return proxy::ensure_proxy_running(&app, &state).await;
     }
-    if current.active_profile_id.as_deref() == Some(profile_id.as_str()) {
-        current.active_profile_id = current.profiles.first().map(|profile| profile.id.clone());
-    }
-    state.persist(&current)?;
-    Ok(current.clone())
+    proxy::stop_proxy(&app, &state)
 }
 
 #[tauri::command]
-pub fn set_active_profile(
+pub async fn set_active_profile(
+    app: AppHandle,
     profile_id: String,
     state: State<'_, AppState>,
 ) -> Result<DesktopSnapshot, String> {
-    ensure_proxy_stopped(&state)?;
-    let mut current = lock_snapshot(&state)?;
-    if !current
-        .profiles
-        .iter()
-        .any(|profile| profile.id == profile_id)
     {
-        return Err("profile was not found".to_string());
+        let mut current = lock_snapshot(&state)?;
+        if !current
+            .profiles
+            .iter()
+            .any(|profile| profile.id == profile_id)
+        {
+            return Err("profile was not found".to_string());
+        }
+        current.active_profile_id = Some(profile_id);
+        state.persist(&current)?;
     }
-    current.active_profile_id = Some(profile_id);
-    state.persist(&current)?;
-    Ok(current.clone())
+    proxy::ensure_proxy_running(&app, &state).await
 }
 
 #[tauri::command]
@@ -613,14 +631,6 @@ fn ensure_profile_exists(state: &AppState, profile_id: &str) -> Result<(), Strin
         return Ok(());
     }
     Err("profile was not found".to_string())
-}
-
-fn ensure_proxy_stopped(state: &AppState) -> Result<(), String> {
-    let current = lock_snapshot(state)?;
-    if current.proxy_status == ProxyStatus::Stopped || current.proxy_status == ProxyStatus::Error {
-        return Ok(());
-    }
-    Err("Stop the proxy before changing the active project or listener".to_string())
 }
 
 fn lock_snapshot(state: &AppState) -> Result<std::sync::MutexGuard<'_, DesktopSnapshot>, String> {

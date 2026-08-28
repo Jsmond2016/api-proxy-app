@@ -66,16 +66,16 @@ button {
 }
 
 .app-shell {
-  display: grid;
+  display: block;
   min-height: 100vh;
-  grid-template-columns: 236px minmax(0, 1fr);
   background: #f8faf5;
 }
 
 .project-sidebar {
   display: flex;
-  flex-direction: column;
-  padding: 28px 16px 18px;
+  align-items: center;
+  min-height: 72px;
+  padding: 12px 28px;
   background: #173f35;
   color: #dce8dd;
 }
@@ -98,8 +98,18 @@ button {
 
 .brand-lockup {
   gap: 11px;
-  padding: 0 7px 34px;
+  padding: 0 28px 0 0;
 }
+
+.project-tabs-bar { display: flex; align-items: center; flex: 1; min-width: 0; gap: 18px; }
+.project-tabs-title { color: #9cb6a2; font-size: 12px; white-space: nowrap; }
+.project-tabs-bar .ant-tabs { flex: 1; min-width: 0; margin: 0; }
+.project-tabs-bar .ant-tabs-nav { margin: 0; }
+.project-tabs-bar .ant-tabs-tab { padding: 12px 14px; color: #b8cdbd; }
+.project-tabs-bar .ant-tabs-tab-active .ant-tabs-tab-btn { color: #f6fbf7; }
+.project-tab-label { display: inline-flex; align-items: center; gap: 8px; }
+.project-tab-label small { color: #8fb49b; font-size: 11px; }
+.project-tabs-actions { display: flex; align-items: center; gap: 4px; }
 
 .brand-mark {
   display: grid;
@@ -694,6 +704,71 @@ h2 {
 
 .row-actions {
   gap: 2px;
+}
+
+.help-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: 2px;
+  cursor: help;
+}
+
+.debug-single-icon {
+  display: inline-grid;
+  width: 15px;
+  height: 15px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.test-loading,
+.test-result {
+  display: grid;
+  gap: 12px;
+}
+
+.test-loading {
+  justify-items: center;
+  padding: 32px 12px;
+  color: #66776b;
+}
+
+.test-loading code,
+.test-result code,
+.test-result pre {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 11px;
+}
+
+.test-result > div {
+  display: grid;
+  gap: 5px;
+}
+
+.test-result pre {
+  max-height: 320px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid #dce5db;
+  border-radius: 4px;
+  background: #f7faf6;
 }
 
 .danger-utility {

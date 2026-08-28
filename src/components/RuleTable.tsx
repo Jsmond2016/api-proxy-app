@@ -1,6 +1,6 @@
-import { App as AntApp, Button, Drawer, Empty, Form, Input, InputNumber, Popconfirm, Select, Space, Spin, Switch, Table, Tooltip } from "antd";
+import { Alert, App as AntApp, Button, Drawer, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Spin, Switch, Table, Tooltip } from "antd";
 import type { TableColumnsType } from "antd";
-import { Pencil, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
+import { Pencil, Play, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 import type { MatchMode, OperationResolution, ProjectProfile, ProxyRule, ResolveOperationInput, RuleInput } from "../types";
@@ -14,6 +14,7 @@ interface RuleTableProps {
   onSave: (input: RuleInput) => Promise<void>;
   onToggle: (ruleId: string, enabled: boolean) => Promise<void>;
   onToggleGlobal: (enabled: boolean) => Promise<void>;
+  onDebugSingle: (ruleId: string) => Promise<void>;
 }
 
 export function RuleTable(props: RuleTableProps) {
@@ -42,13 +43,13 @@ export function RuleTable(props: RuleTableProps) {
     { title: "请求", dataIndex: "path", width: 260, render: (_, rule) => <div className="request-cell"><span className={`method-badge method-${rule.method.toLowerCase()}`}>{rule.method}</span><RulePath rule={rule} onOpenUrl={props.onOpenUrl} /></div> },
     { title: "匹配", dataIndex: "matchMode", width: 130, render: (_, rule) => <span className="match-mode">{rule.matchMode} · P{rule.priority}</span> },
     { title: "Mock 目标", dataIndex: "target", width: 320, render: (target: string) => <div className="target-cell"><span title={target}>{target}</span></div> },
-    { title: "操作", key: "actions", fixed: "right", width: 96, render: (_, rule) => <RuleActions onDelete={props.onDelete} onEdit={setEditing} rule={rule} /> },
-  ], [props.onDelete, props.onOpenUrl, props.onToggle]);
+    { title: "操作", key: "actions", fixed: "right", width: 132, render: (_, rule) => <RuleActions globalMockEnabled={props.profile.globalMockEnabled} onDebugSingle={props.onDebugSingle} onDelete={props.onDelete} onEdit={setEditing} onOpenUrl={props.onOpenUrl} rule={rule} /> },
+  ], [props.onDelete, props.onDebugSingle, props.onOpenUrl, props.onToggle]);
 
   return (
     <section className="rules-section">
       <div className="section-heading">
-        <div className="rules-heading-primary"><h2>Mock 接口</h2><Input allowClear className="search-field" placeholder="搜索接口名称、URL 或 Tag" prefix={<Search size={16} />} value={keyword} onChange={(event) => setKeyword(event.target.value)} /></div>
+        <div className="rules-heading-primary"><h2>Mock 接口 <Tooltip title="不生效时请检查：全局 Mock 开关和当前接口开关是否开启；真实接口域名、路径前缀是否匹配；Apifox 中 Method 是否定义正确（例如实际 GET 却定义为 POST）；接口路径和匹配方式是否一致；HTTPS 证书是否已信任。"><span className="help-icon" aria-label="Mock 接口不生效排查提示">?</span></Tooltip></h2><Input allowClear className="search-field" placeholder="搜索接口名称、URL 或 Tag" prefix={<Search size={16} />} value={keyword} onChange={(event) => setKeyword(event.target.value)} /></div>
         <div className="rules-tools">
           <div className="global-mock-control"><span>全局 Mock</span><Switch aria-label="全局 Mock 开关" checked={props.profile.globalMockEnabled} loading={togglingGlobal} onChange={toggleGlobal} /></div>
           <Button className="command-button" icon={<Plus size={16} />} onClick={() => setCreating(true)} type="primary">添加接口</Button>
@@ -65,9 +66,29 @@ export function RuleTable(props: RuleTableProps) {
   );
 }
 
-function RuleActions(props: { rule: ProxyRule; onDelete: (ruleId: string) => Promise<void>; onEdit: (rule: ProxyRule) => void }) {
-  return <div className="row-actions"><Tooltip title="编辑接口"><Button aria-label="编辑接口" className="row-action" icon={<Pencil size={15} />} onClick={() => props.onEdit(props.rule)} type="text" /></Tooltip><Popconfirm cancelText="取消" description="Apifox 接口可在后续同步相同 Tag 时重新生成。" okButtonProps={{ danger: true }} okText="确认删除" onConfirm={() => props.onDelete(props.rule.id)} title={`删除“${props.rule.name}”？`}><Tooltip title="删除接口"><Button aria-label="删除接口" className="row-action" danger icon={<Trash2 size={15} />} type="text" /></Tooltip></Popconfirm></div>;
+function RuleActions(props: { rule: ProxyRule; globalMockEnabled: boolean; onDelete: (ruleId: string) => Promise<void>; onEdit: (rule: ProxyRule) => void; onDebugSingle: (ruleId: string) => Promise<void>; onOpenUrl: (url: string) => Promise<void> }) {
+  const [testing, setTesting] = useState(false);
+  const [debugging, setDebugging] = useState(false);
+  const [result, setResult] = useState<TestResult | null>(null);
+  const { message } = AntApp.useApp();
+  async function test() {
+    if (!props.globalMockEnabled) { void message.warning("全局 Mock 已关闭，请先开启后再测试接口"); return; }
+    if (!props.rule.enabled) { void message.warning("请先打开当前接口的 Mock 开关"); return; }
+    if (!props.rule.target) { void message.warning("当前接口未配置 Mock 目标"); return; }
+    setTesting(true); setResult(null);
+    try { const response = await fetch(props.rule.target, { method: props.rule.method }); const body = await response.text(); setResult({ status: response.status, statusText: response.statusText, body: formatResponseBody(body), error: "" }); } catch (reason) { setResult({ status: 0, statusText: "请求失败", body: "", error: errorMessage(reason) }); } finally { setTesting(false); }
+  }
+  async function debugSingle() {
+    setDebugging(true);
+    try { await props.onDebugSingle(props.rule.id); void message.success("已关闭其他接口，仅保留当前接口"); } catch (reason) { void message.error(errorMessage(reason)); } finally { setDebugging(false); }
+  }
+  return <div className="row-actions"><Tooltip title="测试接口"><Button aria-label="测试接口" className="row-action" icon={<Play size={15} />} loading={testing} onClick={test} type="text" /></Tooltip><Tooltip title="仅调试当前接口"><Button aria-label="仅调试当前接口" className="row-action" icon={<span className="debug-single-icon">1</span>} loading={debugging} onClick={debugSingle} type="text" /></Tooltip><Tooltip title="编辑接口"><Button aria-label="编辑接口" className="row-action" icon={<Pencil size={15} />} onClick={() => props.onEdit(props.rule)} type="text" /></Tooltip><Popconfirm cancelText="取消" description="Apifox 接口可在后续同步相同 Tag 时重新生成。" okButtonProps={{ danger: true }} okText="确认删除" onConfirm={() => props.onDelete(props.rule.id)} title={`删除“${props.rule.name}”？`}><Tooltip title="删除接口"><Button aria-label="删除接口" className="row-action" danger icon={<Trash2 size={15} />} type="text" /></Tooltip></Popconfirm><Modal cancelText="关闭" okText="去 Mock 接口" onCancel={() => setResult(null)} onOk={() => { void props.onOpenUrl(props.rule.target); }} open={Boolean(result) || testing} title={`测试接口 · ${props.rule.name}`} width={700}>{renderTestContent(testing, result, props.rule)}</Modal></div>;
 }
+
+interface TestResult { status: number; statusText: string; body: string; error: string }
+function renderTestContent(testing: boolean, result: TestResult | null, rule: ProxyRule) { if (testing) return <div className="test-loading"><Spin size="large" /><span>正在发送请求...</span><code>{rule.target}</code></div>; return renderTestResult(result, rule); }
+function renderTestResult(result: TestResult | null, rule: ProxyRule) { if (!result) return null; let message = result.statusText; let type: "success" | "error" = "error"; if (result.status) message = `${result.status} ${result.statusText}`; if (result.status >= 200 && result.status < 300) type = "success"; return <div className="test-result"><Alert message={message} type={type} showIcon /><div><strong>请求方式</strong><code>{rule.method}</code></div><div><strong>请求地址</strong><code>{rule.target}</code></div>{renderTestPayload(result)}</div>; }
+function renderTestPayload(result: TestResult) { if (result.error) return <div><strong>错误信息</strong><pre>{result.error}</pre></div>; return <div><strong>响应内容</strong><pre>{result.body || "（空响应）"}</pre></div>; }
 
 function RulePath(props: { rule: ProxyRule; onOpenUrl: (url: string) => Promise<void> }) {
   if (!props.rule.apifoxWebUrl) return <code>{props.rule.path}</code>;
@@ -154,3 +175,4 @@ function saveButtonLabel(rule: ProxyRule | null) { if (rule) return "更新"; re
 function resolvingIndicator(resolving: boolean) { if (resolving) return <Spin size="small" />; return null; }
 function normalizeRulePath(value: string) { try { return new URL(value).pathname; } catch { const path = value.split(/[?#]/)[0].trim(); if (path.startsWith("/")) return path; return `/${path}`; } }
 function errorMessage(reason: unknown) { if (reason instanceof Error) return reason.message; return String(reason); }
+function formatResponseBody(body: string) { try { return JSON.stringify(JSON.parse(body), null, 2); } catch { return body; } }

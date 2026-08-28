@@ -125,17 +125,17 @@ function App() {
 
   return (
     <main className="app-shell">
-      <ProjectSidebar
-        activeProfileId={snapshot.activeProfileId}
-        appVersion={appVersion}
-        disabled={snapshot.proxyStatus === "starting"}
-        profiles={snapshot.profiles}
-        onCreate={(input) => apply(desktop.createProfile(input), "创建项目")}
-        onDelete={(id) => apply(desktop.deleteProfile(id), "删除项目")}
-        onSelect={(id) => apply(desktop.setActiveProfile(id), "切换项目")}
-        onUpdate={(input) => apply(desktop.updateProfile(input), "更新项目")}
-      />
       <section className="workspace">
+        <ProjectSidebar
+          activeProfileId={snapshot.activeProfileId}
+          appVersion={appVersion}
+          disabled={snapshot.proxyStatus === "starting"}
+          profiles={snapshot.profiles}
+          onCreate={(input) => apply(desktop.createProfile(input), "创建项目")}
+          onDelete={(id) => apply(desktop.deleteProfile(id), "删除项目")}
+          onSelect={(id) => apply(desktop.setActiveProfile(id), "切换项目")}
+          onUpdate={(input) => apply(desktop.updateProfile(input), "更新项目")}
+        />
         <RuntimeNotice />
         <ErrorBanner error={error} onClose={() => setError("")} />
         <Workspace
@@ -169,6 +169,18 @@ interface WorkspaceProps {
 function Workspace(props: WorkspaceProps) {
   const profile = props.activeProfile;
   if (!profile) return <EmptyWorkspace />;
+  const currentProfile = profile;
+  async function debugSingle(ruleId: string) {
+    await props.apply(desktop.setGlobalMockEnabled(currentProfile.id, true), "开启全局 Mock");
+    const currentRule = currentProfile.rules.find((rule) => rule.id === ruleId);
+    if (currentRule && !currentRule.enabled) {
+      await props.apply(desktop.setRuleEnabled(currentProfile.id, ruleId, true), "开启当前接口 Mock");
+    }
+    const otherRules = currentProfile.rules.filter((rule) => rule.id !== ruleId && rule.enabled);
+    for (const rule of otherRules) {
+      await props.apply(desktop.setRuleEnabled(currentProfile.id, rule.id, false), "关闭其他接口 Mock");
+    }
+  }
   return (
     <>
       <ProxyHeader globalMockEnabled={profile.globalMockEnabled} profile={profile} status={props.snapshot.proxyStatus} />
@@ -179,7 +191,7 @@ function Workspace(props: WorkspaceProps) {
           <CertificatePanel certificate={props.snapshot.certificate} onGenerate={() => props.apply(desktop.generateCertificate(), "生成证书")} onOpen={() => props.execute(desktop.openCertificate(), "打开证书")} onRefresh={() => props.apply(desktop.refreshCertificate(), "刷新证书信任")} />
         </div>
       </div>
-      <RuleTable profile={profile} onDelete={(id) => props.apply(desktop.deleteRule(profile.id, id), "删除 Mock 接口")} onOpenUrl={(url) => props.execute(desktop.openExternalUrl(url), "打开 Apifox 接口")} onReset={() => props.apply(desktop.clearRules(profile.id), "重置 Mock 接口列表")} onResolve={desktop.resolveApifoxOperation} onSave={(input: RuleInput) => props.apply(desktop.saveRule(input), "保存 Mock 接口")} onToggle={(id, enabled) => props.apply(desktop.setRuleEnabled(profile.id, id, enabled), "切换接口 Mock")} onToggleGlobal={(enabled) => props.apply(desktop.setGlobalMockEnabled(profile.id, enabled), "切换全局 Mock")} />
+      <RuleTable profile={profile} onDebugSingle={debugSingle} onDelete={(id) => props.apply(desktop.deleteRule(profile.id, id), "删除 Mock 接口")} onOpenUrl={(url) => props.execute(desktop.openExternalUrl(url), "打开 Apifox 接口")} onReset={() => props.apply(desktop.clearRules(profile.id), "重置 Mock 接口列表")} onResolve={desktop.resolveApifoxOperation} onSave={(input: RuleInput) => props.apply(desktop.saveRule(input), "保存 Mock 接口")} onToggle={(id, enabled) => props.apply(desktop.setRuleEnabled(profile.id, id, enabled), "切换接口 Mock")} onToggleGlobal={(enabled) => props.apply(desktop.setGlobalMockEnabled(profile.id, enabled), "切换全局 Mock")} />
       <RequestLogPanel logs={props.snapshot.logs} onClear={() => props.apply(desktop.clearLogs(), "清空请求记录")} />
     </>
   );

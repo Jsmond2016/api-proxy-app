@@ -1,6 +1,5 @@
-import { Button, Form, Input, InputNumber, Modal, Tooltip } from "antd";
-import classNames from "classnames";
-import { FolderPlus, Layers3, Pencil, Trash2 } from "lucide-react";
+import { Button, Form, Input, InputNumber, Modal, Tabs, Tooltip } from "antd";
+import { FolderPlus, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ProfileInput, ProjectProfile } from "../types";
 
@@ -48,8 +47,9 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
     }
   }
 
+  const tabItems = props.profiles.map((profile) => ({ key: profile.id, label: <span className="project-tab-label"><span>{profile.name}</span><small>{profile.rules.length}</small></span> }));
   return (
-    <aside className="project-sidebar">
+    <header className="project-sidebar">
       <div className="brand-lockup">
         <div className="brand-mark">A</div>
         <div className="brand-copy">
@@ -57,22 +57,14 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
           <p className="brand-caption">WECHAT DEVTOOLS</p>
         </div>
       </div>
-      <div className="sidebar-label-row">
-        <span>联调项目</span>
-        <Tooltip title="新建项目"><Button aria-label="新建项目" className="icon-button" disabled={props.disabled} icon={<FolderPlus size={16} />} onClick={openCreate} type="text" /></Tooltip>
-      </div>
-      <nav className="project-list" aria-label="联调项目">
-        {props.profiles.map((profile) => (
-          <Button className={profileClass(profile.id, props.activeProfileId)} key={profile.id} onClick={() => props.onSelect(profile.id)} type="text">
-            <Layers3 size={17} /><span>{profile.name}</span><small>{profile.rules.length}</small>
-          </Button>
-        ))}
-      </nav>
-      <div className="sidebar-bottom">
-        <Button className="sidebar-utility" disabled={!props.activeProfileId || props.disabled} icon={<Pencil size={16} />} onClick={openEdit} type="text">
-          编辑当前项目
-        </Button>
-        <Button className="sidebar-utility danger-utility" danger disabled={!props.activeProfileId || props.disabled} icon={<Trash2 size={16} />} onClick={removeCurrent} type="text">删除当前项目</Button>
+      <div className="project-tabs-bar">
+        <span className="project-tabs-title">联调项目</span>
+        <Tabs activeKey={props.activeProfileId || undefined} items={tabItems} onChange={(id) => { void props.onSelect(id); }} />
+        <div className="project-tabs-actions">
+          <Tooltip title="新建项目"><Button aria-label="新建项目" className="icon-button" disabled={props.disabled} icon={<FolderPlus size={16} />} onClick={openCreate} type="text" /></Tooltip>
+          <Tooltip title="编辑当前项目"><Button aria-label="编辑当前项目" className="icon-button" disabled={!props.activeProfileId || props.disabled} icon={<Pencil size={16} />} onClick={openEdit} type="text" /></Tooltip>
+          <Tooltip title="删除当前项目"><Button aria-label="删除当前项目" className="icon-button danger-utility" danger disabled={!props.activeProfileId || props.disabled} icon={<Trash2 size={16} />} onClick={removeCurrent} type="text" /></Tooltip>
+        </div>
       </div>
       <ProfileDialog
         key={editing?.id || String(creating)}
@@ -89,7 +81,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
         profile={props.profiles.find((profile) => profile.id === props.activeProfileId) || null}
         visible={deleteOpen}
       />
-    </aside>
+    </header>
   );
 }
 
@@ -100,10 +92,6 @@ function DeleteProjectDialog(props: { visible: boolean; busy: boolean; profile: 
       <p>确定删除“{props.profile.name}”及其本地 Mock 接口吗？该项目配置中的 Access Token 和 Mock Token 也会删除。</p>
     </Modal>
   );
-}
-
-function profileClass(id: string, activeId: string | null) {
-  return classNames("project-item", { "project-item-active": id === activeId });
 }
 
 interface ProfileDialogProps {

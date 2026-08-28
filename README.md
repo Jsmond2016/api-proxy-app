@@ -63,6 +63,14 @@ Rust 测试包含真实回环 HTTP 转发及 HTTPS CONNECT + 动态 CA + TLS ups
 pnpm tauri build
 ```
 
+日常手动快速打包 macOS DMG：
+
+```bash
+pnpm package:mac
+```
+
+该命令会自动执行前端构建，并生成当前架构的 DMG 安装包。
+
 构建产物位于：
 
 ```text

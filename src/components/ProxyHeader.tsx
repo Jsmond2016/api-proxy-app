@@ -7,11 +7,10 @@ interface ProxyHeaderProps {
   globalMockEnabled: boolean;
 }
 
-export function ProxyHeader({ profile, status, globalMockEnabled }: ProxyHeaderProps) {
+export function ProxyHeader({ status, globalMockEnabled }: ProxyHeaderProps) {
   return (
     <header className="proxy-header">
       <div>
-        <div className="eyebrow">当前项目 / {profile.name}</div>
         <div className="proxy-title-row"><h1>微信开发者工具代理</h1><Badge className={statusClass(status)} status={badgeStatus(status)} text={status} /></div>
         <p>{statusCopy(status, globalMockEnabled)}</p>
       </div>

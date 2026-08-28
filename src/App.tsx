@@ -1,6 +1,7 @@
 import { Alert, App as AntApp, Button, Empty, Spin } from "antd";
 import { AlertCircle, Monitor } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import type { ComponentProps } from "react";
 import { ApifoxSyncPanel } from "./components/ApifoxSyncPanel";
 import { CertificatePanel } from "./components/CertificatePanel";
 import { ConnectionGuide } from "./components/ConnectionGuide";
@@ -126,16 +127,6 @@ function App() {
   return (
     <main className="app-shell">
       <section className="workspace">
-        <ProjectSidebar
-          activeProfileId={snapshot.activeProfileId}
-          appVersion={appVersion}
-          disabled={snapshot.proxyStatus === "starting"}
-          profiles={snapshot.profiles}
-          onCreate={(input) => apply(desktop.createProfile(input), "创建项目")}
-          onDelete={(id) => apply(desktop.deleteProfile(id), "删除项目")}
-          onSelect={(id) => apply(desktop.setActiveProfile(id), "切换项目")}
-          onUpdate={(input) => apply(desktop.updateProfile(input), "更新项目")}
-        />
         <RuntimeNotice />
         <ErrorBanner error={error} onClose={() => setError("")} />
         <Workspace
@@ -143,6 +134,7 @@ function App() {
           snapshot={snapshot}
           apply={apply}
           execute={execute}
+          projectNavigation={{ activeProfileId: snapshot.activeProfileId, appVersion, disabled: snapshot.proxyStatus === "starting", profiles: snapshot.profiles, onCreate: (input) => apply(desktop.createProfile(input), "创建项目"), onDelete: (id) => apply(desktop.deleteProfile(id), "删除项目"), onSelect: (id) => apply(desktop.setActiveProfile(id), "切换项目"), onUpdate: (input) => apply(desktop.updateProfile(input), "更新项目") }}
           validateApifox={validateApifox}
         />
         <DiagnosticPanel entries={diagnostics} onClear={() => setDiagnostics([])} snapshot={snapshot} />
@@ -164,6 +156,7 @@ interface WorkspaceProps {
   apply: (action: Promise<DesktopSnapshot>, label: string) => Promise<void>;
   execute: (action: Promise<unknown>, label: string) => Promise<void>;
   validateApifox: typeof desktop.validateApifox;
+  projectNavigation: ComponentProps<typeof ProjectSidebar>;
 }
 
 function Workspace(props: WorkspaceProps) {
@@ -184,6 +177,7 @@ function Workspace(props: WorkspaceProps) {
   return (
     <>
       <ProxyHeader globalMockEnabled={profile.globalMockEnabled} profile={profile} status={props.snapshot.proxyStatus} />
+      <ProjectSidebar {...props.projectNavigation} />
       <div className="workspace-grid">
         <ConnectionGuide certificate={props.snapshot.certificate} hasTraffic={props.snapshot.logs.length > 0} profile={profile} proxyStatus={props.snapshot.proxyStatus} />
         <div className="workspace-config-actions">

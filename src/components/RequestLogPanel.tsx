@@ -23,7 +23,7 @@ export function RequestLogPanel({ logs, onClear }: RequestLogPanelProps) {
         <Select aria-label="状态筛选" value={status} onChange={setStatus} options={[{ value: "all", label: "全部状态" }, { value: "matched", label: "已 Mock" }, { value: "passed", label: "透传" }, { value: "failed", label: "失败" }]} />
         <Tooltip title="清空请求记录"><Button aria-label="清空请求记录" className="icon-button" icon={<X size={16} />} onClick={onClear} type="text" /></Tooltip>
       </div></div>
-      <div className="log-stream">{visible.map((log) => <LogRow key={log.id} log={log} />)}<EmptyLogs count={visible.length} /></div>
+      <div className={logStreamClass(visible.length)}>{visible.map((log) => <LogRow key={log.id} log={log} />)}<EmptyLogs count={visible.length} /></div>
     </section>
   );
 }
@@ -33,6 +33,7 @@ function LogRow({ log }: { log: RequestLog }) {
 }
 
 function formatTime(value: string) { const numeric = Number(value); let date: Date; if (Number.isNaN(numeric)) date = new Date(value); else date = new Date(numeric); if (Number.isNaN(date.getTime())) return value; const pad = (part: number) => String(part).padStart(2, "0"); return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`; }
+function logStreamClass(count: number) { if (count > 0) return "log-stream has-logs"; return "log-stream empty"; }
 function destination(log: RequestLog) { if (log.destination) return log.destination; return `阶段：${log.stage}`; }
 function ruleName(log: RequestLog) { if (log.ruleName) return log.ruleName; return "未命中"; }
 function responseCode(log: RequestLog) { if (log.responseCode !== null) return String(log.responseCode); return "--"; }

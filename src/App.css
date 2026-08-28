@@ -388,7 +388,7 @@ h2 {
 .workspace-config-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -761,6 +761,9 @@ h2 {
   gap: 5px;
 }
 
+.original-url { display: inline-flex; align-items: center; gap: 4px; }
+.test-modal-footer { display: flex; justify-content: space-between; }
+
 .test-result pre {
   max-height: 320px;
   overflow: auto;
@@ -952,6 +955,7 @@ h2 {
 .section-heading {
   justify-content: space-between;
   gap: 14px;
+  margin-bottom: 16px;
 }
 
 .section-heading h2 {

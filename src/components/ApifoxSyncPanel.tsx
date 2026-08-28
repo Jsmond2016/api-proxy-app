@@ -106,7 +106,7 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
 
   return (
     <>
-      <Button className="config-entry-button" icon={<RefreshCw size={15} />} onClick={() => setOpen(true)}>{apifoxEntryLabel(props.profile)}</Button>
+      <Button className="config-entry-button" icon={<RefreshCw size={15} />} onClick={() => setOpen(true)} type="primary">{apifoxEntryLabel(props.profile)}</Button>
       <Modal className="apifox-sync-modal" footer={null} modalRender={(node) => <div onWheel={(event) => event.stopPropagation()}>{node}</div>} onCancel={() => setOpen(false)} open={open} title="连接并同步 Apifox 接口" width={680}>
         <section className="apifox-sync-panel apifox-modal-scroll" onWheel={(event) => event.stopPropagation()}>
           <div className="apifox-panel-head">
@@ -166,4 +166,4 @@ function InterfacePreviewPanel(props: { preview: ApifoxPreview | null; busy: boo
 }
 
 function PreviewRemainder({ total }: { total: number }) { if (total <= 8) return null; return <small className="preview-remainder">另有 {total - 8} 个接口将在确认后同步</small>; }
-function apifoxEntryLabel(profile: ProjectProfile) { if (profile.syncedTags.length > 0) return `Apifox 接口 · ${profile.rules.filter((rule) => rule.source === "apifox").length} 条`; return "连接 Apifox"; }
+function apifoxEntryLabel(profile: ProjectProfile) { if (profile.syncedTags.length > 0) return "Apifox 接口"; return "连接 Apifox"; }

@@ -114,13 +114,13 @@ function App() {
     });
   }
 
-  async function apply(action: Promise<DesktopSnapshot>, label: string) {
+  async function apply(action: Promise<DesktopSnapshot>, label: string, notifySuccess = true) {
     setError("");
     recordDiagnostic("info", label, "操作已开始");
     try {
       setSnapshot(await action);
       recordDiagnostic("success", label, "操作成功");
-      notify("success", label, "操作成功");
+      if (notifySuccess) notify("success", label, "操作成功");
     } catch (reason) {
       showError(reason);
       recordDiagnostic("error", label, errorMessage(reason));
@@ -196,7 +196,7 @@ function InitializationState(props: { busy: boolean; error: string; onRetry: () 
 interface WorkspaceProps {
   activeProfile: DesktopSnapshot["profiles"][number] | null;
   snapshot: DesktopSnapshot;
-  apply: (action: Promise<DesktopSnapshot>, label: string) => Promise<void>;
+  apply: (action: Promise<DesktopSnapshot>, label: string, notifySuccess?: boolean) => Promise<void>;
   execute: (action: Promise<unknown>, label: string) => Promise<void>;
   validateApifox: typeof desktop.validateApifox;
   projectNavigation: ComponentProps<typeof ProjectSidebar>;
@@ -207,16 +207,18 @@ function Workspace(props: WorkspaceProps) {
   const profile = props.activeProfile;
   if (!profile) return <><ProjectSidebar {...props.projectNavigation} /><EmptyWorkspace /></>;
   const currentProfile = profile;
+  const { message } = AntApp.useApp();
   async function debugSingle(ruleId: string) {
-    await props.apply(desktop.setGlobalMockEnabled(currentProfile.id, true), "开启全局 Mock");
+    await props.apply(desktop.setGlobalMockEnabled(currentProfile.id, true), "开启全局 Mock", false);
     const currentRule = currentProfile.rules.find((rule) => rule.id === ruleId);
     if (currentRule && !currentRule.enabled) {
-      await props.apply(desktop.setRuleEnabled(currentProfile.id, ruleId, true), "开启当前接口 Mock");
+      await props.apply(desktop.setRuleEnabled(currentProfile.id, ruleId, true), "开启当前接口 Mock", false);
     }
     const otherRules = currentProfile.rules.filter((rule) => rule.id !== ruleId && rule.enabled);
     for (const rule of otherRules) {
-      await props.apply(desktop.setRuleEnabled(currentProfile.id, rule.id, false), "关闭其他接口 Mock");
+      await props.apply(desktop.setRuleEnabled(currentProfile.id, rule.id, false), "关闭其他接口 Mock", false);
     }
+    void message.success("已关闭其他接口，仅保留当前接口");
   }
   return (
     <>

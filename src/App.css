@@ -113,8 +113,8 @@ button {
 .project-tabs-actions { display: flex; align-items: center; gap: 4px; }
 
 .header-brand { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; }
-.header-brand .brand-mark { width: 28px; height: 28px; border-color: #6f9b82; color: #1f5b43; font-size: 17px; }
-.header-brand-name { margin: 0; color: #1f5b43; font-family: "SF Mono", Menlo, monospace; font-size: 13px; font-weight: 800; }
+.header-brand .brand-mark { width: 28px; height: 28px; border-color: #8bbca0; color: #e4f1e6; font-size: 17px; }
+.header-brand-name { margin: 0; color: #d9f0df; font-family: "SF Mono", Menlo, monospace; font-size: 13px; font-weight: 800; }
 
 .brand-mark {
   display: grid;
@@ -254,9 +254,9 @@ button {
   gap: 24px;
   margin-bottom: 18px;
   padding: 18px 22px 20px;
-  border: 1px solid #d9e0d8;
+  border: 1px solid #34443a;
   border-radius: 6px;
-  background: #e8eee7;
+  background: #1c2620;
 }
 
 .eyebrow,
@@ -272,7 +272,7 @@ button {
   margin-top: 8px;
 }
 
-.proxy-title-row h1 { font-size: 24px; }
+.proxy-title-row h1 { color: #f1f7f2; font-size: 24px; }
 
 h1,
 h2,
@@ -297,7 +297,7 @@ h2 {
 
 .proxy-header p {
   margin-top: 8px;
-  color: #67776d;
+  color: #b5c8ba;
   font-size: 13px;
 }
 

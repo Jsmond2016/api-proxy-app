@@ -6,7 +6,7 @@
 
 ## 方案概览
 
-本方案对应当前 `0.1.26` 的 Tauri 2 桌面代理实现。React 负责项目、在线 Apifox、Tag、Mock 接口、证书和日志工作台；Rust 负责版本化配置、Apifox OpenAPI 导出、规则编译、HTTP/HTTPS 代理、CA 管理和事件推送。参考交互项目为 `/Users/huangjing/Desktop/MyCode/github/api_proxy_tool_ext`，但桌面版不依赖浏览器扩展。
+本方案对应当前 `0.1.27` 的 Tauri 2 桌面代理实现。React 负责项目、在线 Apifox、Tag、Mock 接口、证书和日志工作台；Rust 负责版本化配置、Apifox OpenAPI 导出、规则编译、HTTP/HTTPS 代理、CA 管理和事件推送。参考交互项目为 `/Users/huangjing/Desktop/MyCode/github/api_proxy_tool_ext`，但桌面版不依赖浏览器扩展。
 
 实现按最小可验证增量推进：先建立真实配置和安全状态模型，再接通 Apifox/Tag，再修复代理匹配与实时事件，最后完成 CA、微信开发者工具和打包验收。任何阶段都不得以静态演示数据代替真实结果。
 
@@ -74,6 +74,7 @@ Rust Application Services
 | R24 | 在 `AppState::load` 将所有 Profile 的 `global_mock_enabled` 重置为 `false` 并持久化安全启动状态；Tauri `setup` 完成状态注册后，若存在活动 Profile 则异步启动 loopback listener；将代理启停能力收敛为内部生命周期服务，Profile 创建、切换、活动端口修改和活动 Profile 删除通过统一 restart/ensure-running 流程切换监听，移除 `ensure_proxy_stopped` 对用户配置操作的阻断；`RuleProxyHandler` 继续在 `global_mock_enabled=false` 时直接 miss 并透传，开启后才匹配启用规则；删除 `ProxyHeader` 手动启停按钮和前端 start/stop 回调，改为展示“端口监听中 · 全量透传/按规则 Mock”状态，保留规则区“全局 Mock”Switch 作为唯一业务开关；无 Profile 时保持无监听，绑定失败进入 error 并在初始化/诊断区明确提示；版本升级至 0.1.10 | `state.rs`、`proxy/mod.rs`、`commands.rs`、`lib.rs`、`App.tsx`、`ProxyHeader.tsx`、`ConnectionGuide.tsx`、`RequestLogPanel.tsx`、`desktop.ts`、测试、文档和版本文件 | GPT-5 Codex | Rust 启动自动监听测试、启动强制透传测试、HTTP/HTTPS 透传与 Mock E2E、全局开关状态保持测试、Profile/端口切换自动重启测试、端口冲突错误测试、前端构建与源码约束、0.1.10 DMG 安装验收 | 已确认 |
 | R25 | 将 `ApifoxSyncPanel` 收敛为在线项目专用弹框，移除 Local 模式分支和本地 URL 字段；参照 `api_proxy_tool_ext` 的在线配置分区与操作顺序重排 `Form`、Tag 发现/确认和接口预览；Modal 使用独立滚动 body，设置 `overscroll-behavior: contain`、阻止滚轮事件冒泡并在弹框打开时锁定页面滚动，避免外层 workspace 响应滚轮 | `ApifoxSyncPanel.tsx`、`App.tsx`、`App.css`、`types.ts`（如清理 Local 契约）、参考项目交互映射文档 | GPT-5 Codex | 在线模式表单/验证/Tag/预览/同步交互源码检查；Modal 内滚动与页面滚动隔离测试；前端构建、源码约束和桌面窄视口验收 | 已确认 |
 | R26 | 在规则表操作列增加测试按钮和测试结果 Modal；测试通过当前规则目标发起请求，展示请求 URL、状态、响应数据和错误；全局关闭时允许“仅调试当前接口”原子开启全局 Mock 并关闭其他规则，复用现有 `onToggle`/`onToggleGlobal` 持久化；测试前检查规则 enabled、target 和当前全局状态，Modal 内部滚动隔离 | `RuleTable.tsx`、`App.tsx`、`App.css`、`types.ts`（仅在测试请求确需时扩展字段） | GPT-5 Codex | 测试按钮/校验/请求结果源码检查；单接口调试状态持久化测试；前端构建、源码约束、Rust 回归和桌面人工验收 | 已确认 |
+| R46 | `RuleActions` 在测试结果 Modal 内增加响应搜索状态和 `Ctrl/Cmd+F` 快捷键监听；响应 `<pre>` 设置最大高度和内部滚动，搜索匹配使用安全 React 节点渲染并自动滚动首个匹配 | `RuleTable.tsx`、`App.css` | GPT-5 Codex | 前端构建、源码约束、搜索输入/快捷键源码检查、桌面大响应人工验收 | 已确认 |
 | R12 | 建立 Rust 单元/集成、前端测试和本地双 upstream E2E；更新 README/使用文档；构建并校验 arm64 app/dmg | tests、scripts、docs、Tauri bundle | GPT-5 Codex | `pnpm build`、`check:source`、`cargo test`、E2E、codesign、hdiutil | 已确认 |
 
 ## 数据模型设计
@@ -461,6 +462,8 @@ Content-Type: application/json
 | 2026-08-28 | 0.1.23 最终交付基线 | 通过 | 最新 DMG 为 `src-tauri/target/release/bundle/dmg/Apifox Proxy_0.1.23_aarch64.dmg`；`hdiutil verify` 通过，SHA-256 `d452af3b8ba71e94e5ac1ad80729c05bfd9eb7b8d299e7cecb6acbda135e6007`；代码级验证沿用前述构建、源码检查、Rust 检查和 E2E 证据 |
 | 2026-08-28 | 0.1.25 关闭确认与安装包修复 | 通过 | 确认关闭前注销 `onCloseRequested` 监听再调用 `Window.close()`；`pnpm package:mac` 使用 staging 目录和 `/Applications` 入口生成安装型 DMG；`hdiutil verify` 通过，SHA-256 `38e501bda60a369e3b5df3350ba12049ce65bb9ed100b35c0bc93c6b668c9f9e` |
 | 2026-08-28 | 0.1.26 修复窗口关闭 ACL | 通过构建验证 | 主窗口 capability 增加 `core:window:allow-close`，保留确认后注销监听再关闭逻辑；DMG 已生成并通过 `hdiutil verify`，SHA-256 `73b577be3a9c4ed84346d5bf77ad18e9b1524b58b4841641817309493fb388e1`；仍需用户在打包应用中人工点击关闭确认窗口退出 |
+| 2026-08-28 | 0.1.27 测试响应搜索交付包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；`hdiutil verify` 通过，SHA-256 `5be412c58e7a916aab60601f2d1a9fa630c0575ebd9e9a535b9c6cd975408e07` |
+| 2026-08-28 | 完成 R46 测试响应搜索与弹框操作调整 | 通过构建验证 | 测试弹框移除重复“关闭”按钮，“去 Mock 接口”固定右侧；响应内容增加搜索框、`Ctrl/Cmd+F` 聚焦、匹配高亮、首个匹配自动滚动和 420px 内部滚动；`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |
 | 2026-08-27 | 0.1.9 用户安装验收 | 通过 | 用户确认验证通过并要求提交当前实现 |
 | 2026-08-27 | 微信开发者工具真实项目人工验收 | 待用户执行 | 需要用户的真实源域名、Apifox 项目、Token 和微信开发者工具环境；按 `main-使用与验收文档.md` 验收 |
 # R20 Ant Design UI 迁移方案

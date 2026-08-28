@@ -685,7 +685,7 @@ h2 {
 }
 
 .original-url { display: inline-flex; align-items: center; gap: 4px; }
-.test-modal-footer { display: flex; justify-content: space-between; }
+.test-modal-footer { display: flex; justify-content: flex-end; }
 
 .test-result pre {
   max-height: 320px;
@@ -695,6 +695,23 @@ h2 {
   border: 1px solid #dce5db;
   border-radius: 4px;
   background: #f7faf6;
+}
+
+.response-payload {
+  display: grid;
+  gap: 7px;
+}
+
+.response-payload pre {
+  max-height: 420px;
+  white-space: pre;
+}
+
+.response-payload mark {
+  padding: 0 1px;
+  border-radius: 2px;
+  background: #f6d778;
+  color: #273b2e;
 }
 
 .danger-utility {

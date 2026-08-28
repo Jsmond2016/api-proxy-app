@@ -17,9 +17,9 @@ macOS 桌面代理工具，用于在不修改微信小程序代码的情况下�
 ## 已实现能力
 
 - 真实项目的创建、编辑、删除、切换和版本化持久化。
-- Apifox 在线项目导出与本地 OpenAPI URL 两种来源。
+- Apifox 在线项目导出（当前仅支持在线模式）。
 - Access Token、Mock Token 按项目存储到本地 Profile 配置并在表单中保留。
-- Tag 发现、同步 diff 确认和 Merge/Replace。
+- Tag 发现、同步 diff 确认和 Replace 同步。
 - 独立全局 Mock Switch、Apifox 规则稳定 ID、自定义规则 CRUD、优先级和逐接口启停。
 - 按 host -> path prefix -> global switch -> method -> rule 的确定性匹配。
 - `exact`、`template`、`regex`、`contains` 路径匹配和动态路径改写。
@@ -75,7 +75,7 @@ pnpm package:mac
 
 ```text
 src-tauri/target/release/bundle/macos/Apifox Proxy.app
-src-tauri/target/release/bundle/dmg/Apifox Proxy_0.1.11_aarch64.dmg
+src-tauri/target/release/bundle/dmg/Apifox Proxy_<version>_aarch64.dmg
 ```
 
 详细配置、微信开发者工具接入和验收步骤见 [使用与验收文档](specs/需求-main/main-使用与验收文档.md)。问题审查和完整方案见 [需求文档](specs/需求-main/main-需求文档.md) 与 [技术方案](specs/需求-main/main-技术方案文档.md)。

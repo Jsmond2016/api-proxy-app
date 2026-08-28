@@ -6,7 +6,7 @@
 
 ## 方案概览
 
-本方案对应当前 `0.1.23` 的 Tauri 2 桌面代理实现。React 负责项目、在线 Apifox、Tag、Mock 接口、证书和日志工作台；Rust 负责版本化配置、Apifox OpenAPI 导出、规则编译、HTTP/HTTPS 代理、CA 管理和事件推送。参考交互项目为 `/Users/huangjing/Desktop/MyCode/github/api_proxy_tool_ext`，但桌面版不依赖浏览器扩展。
+本方案对应当前 `0.1.25` 的 Tauri 2 桌面代理实现。React 负责项目、在线 Apifox、Tag、Mock 接口、证书和日志工作台；Rust 负责版本化配置、Apifox OpenAPI 导出、规则编译、HTTP/HTTPS 代理、CA 管理和事件推送。参考交互项目为 `/Users/huangjing/Desktop/MyCode/github/api_proxy_tool_ext`，但桌面版不依赖浏览器扩展。
 
 实现按最小可验证增量推进：先建立真实配置和安全状态模型，再接通 Apifox/Tag，再修复代理匹配与实时事件，最后完成 CA、微信开发者工具和打包验收。任何阶段都不得以静态演示数据代替真实结果。
 
@@ -181,7 +181,7 @@ Content-Type: application/json
 
 ### 本地模式（已废弃）
 
-早期方案曾允许读取用户配置的本地 OpenAPI URL；为与参考项目及当前产品交互保持一致，`0.1.23` 前端已移除 Local 模式入口，在线 Apifox 项目是唯一支持的连接方式。Rust 数据模型保留必要兼容字段时，不得在新 UI 中重新暴露该能力。
+早期方案曾允许读取用户配置的本地 OpenAPI URL；为与参考项目及当前产品交互保持一致，`0.1.25` 前端已移除 Local 模式入口，在线 Apifox 项目是唯一支持的连接方式。Rust 数据模型保留必要兼容字段时，不得在新 UI 中重新暴露该能力。
 
 ### Tag 与同步语义
 
@@ -418,6 +418,7 @@ Content-Type: application/json
 | 2026-08-28 | 提议 R44：移除静态项目标题并保证至少一个真实项目 Tab | 删除 `project-tabs-title` 展示；在删除项目入口禁用最后一个项目的删除操作，并在后端删除命令增加最后项目保护，确保始终存在可选项目 | R44 | GPT-5 Codex |
 | 2026-08-28 | 提议 R45：关闭应用前增加代理还原提醒 | 在 Tauri 窗口关闭事件中拦截关闭动作，使用应用内确认对话框提醒用户还原微信开发者工具代理设置；确认后允许关闭，取消则保持应用运行 | R45 | GPT-5 Codex |
 | 2026-08-28 | 完成 R45 | R45 | GPT-5 Codex | 使用 Tauri `onCloseRequested` 拦截桌面窗口关闭，Ant Design Modal 展示代理还原路径；确认后放行窗口关闭，网页预览不注册监听 |
+| 2026-08-28 | 修复 R45 关闭确认后窗口未退出 | R45 | GPT-5 Codex | `window.close()` 在关闭事件再次触发时可能继续被拦截；确认回调改用 Tauri `Window.destroy()` 绕过重复拦截，取消仍保持窗口运行 |
 | 2026-08-28 | 完成 R44 | R44 | GPT-5 Codex | 移除静态项目标题；最后一个项目 Tab 的删除入口禁用，`delete_profile` 后端命令同步拒绝删除最后项目 |
 | 2026-08-28 | 完成 R41 | R41 | GPT-5 Codex | 代理标题恢复浅色背景卡片层级；APIFOX PROXY 仅保留品牌文案并移除 WECHAT DEVTOOLS 副标题 |
 | 2026-08-28 | 完成 R40 | R40 | GPT-5 Codex | 删除请求/匹配独立列，接口信息列按中文名称与 Method+URL 两行展示，保留 URL 外链 |
@@ -425,7 +426,7 @@ Content-Type: application/json
 
 ## 当前交付基线
 
-- 版本：`0.1.23`，最新提交：`40fb574 feat(safety): 增加关闭应用前代理还原提醒`。
+- 版本：`0.1.25`，本次为遗留代码清理与关闭确认修复维护版本。
 - 已实现并完成代码级验证：项目 Tabs/CRUD、在线 Apifox Tag Replace 同步、Mock Token、HTTP/HTTPS 代理、全局与单接口 Mock 门控、规则测试/编辑/删除/重置、实时请求记录、真机模拟提示词、Ant Design 工作台和关闭提醒。
 - 明确边界：仅支持在线 Apifox 模式；不自动修改微信开发者工具或 macOS 系统代理；不绕过证书固定；真实微信开发者工具和真实 Apifox 账号仍需用户按使用与验收文档人工验收。
 
@@ -458,6 +459,7 @@ Content-Type: application/json
 | 2026-08-28 | R25 在线弹框与滚轮隔离 | 通过（自动视觉检查受限） | `pnpm build`、`pnpm run check:source`、`cargo check`、`cargo fmt --check`、`git diff --check` 通过；当前无可用浏览器连接，未执行自动截图与滚轮人工验收 |
 | 2026-08-28 | R26 Mock 接口测试与单接口调试 | 通过（自动视觉检查受限） | `pnpm build`、`pnpm run check:source`、`git diff --check` 通过；当前无可用浏览器连接，未执行桌面点击和真实 Mock 请求人工验收 |
 | 2026-08-28 | 0.1.23 最终交付基线 | 通过 | 最新 DMG 为 `src-tauri/target/release/bundle/dmg/Apifox Proxy_0.1.23_aarch64.dmg`；`hdiutil verify` 通过，SHA-256 `d452af3b8ba71e94e5ac1ad80729c05bfd9eb7b8d299e7cecb6acbda135e6007`；代码级验证沿用前述构建、源码检查、Rust 检查和 E2E 证据 |
+| 2026-08-28 | 0.1.25 关闭确认修复包 | 通过 | `.app` 由 `pnpm tauri build --bundles app` 生成；DMG 使用 `hdiutil create` 生成并通过 `hdiutil verify`；确认关闭改用 Tauri `Window.destroy()` |
 | 2026-08-27 | 0.1.9 用户安装验收 | 通过 | 用户确认验证通过并要求提交当前实现 |
 | 2026-08-27 | 微信开发者工具真实项目人工验收 | 待用户执行 | 需要用户的真实源域名、Apifox 项目、Token 和微信开发者工具环境；按 `main-使用与验收文档.md` 验收 |
 # R20 Ant Design UI 迁移方案

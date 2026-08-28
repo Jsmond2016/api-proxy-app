@@ -121,14 +121,6 @@ export async function clearLogs() {
   return invokeDesktop("clear_logs");
 }
 
-export async function startProxy() {
-  return invokeDesktop("start_proxy");
-}
-
-export async function stopProxy() {
-  return invokeDesktop("stop_proxy");
-}
-
 export async function subscribeProxyEvents(
   onSnapshot: (snapshot: DesktopSnapshot) => void,
   onRequest: (log: RequestLog) => void,

@@ -1,5 +1,7 @@
 # Tauri Desktop App 开发方案文档
 
+> 历史归档文档。当前 `main` 分支以 `specs/需求-main/main-技术方案文档.md` 为唯一权威技术方案来源。
+
 ## 开发分支
 `feature/tauri-desktop-app`
 

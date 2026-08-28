@@ -86,14 +86,12 @@ button {
 .brand-lockup,
 .proxy-title-row,
 .header-actions,
-.sidebar-label-row,
 .section-heading,
 .rules-tools,
 .log-tools,
 .workspace-grid,
 .apifox-panel-head,
 .log-row,
-.match-mode,
 .log-rule {
   display: flex;
   align-items: center;
@@ -129,48 +127,10 @@ button {
   font-size: 20px;
 }
 
-.brand-name,
-.brand-caption,
 .section-kicker,
 .eyebrow {
   margin: 0;
   letter-spacing: 0;
-}
-
-.brand-name {
-  color: #f6fbf7;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.brand-copy {
-  min-width: 0;
-}
-
-.brand-title-row {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.brand-version {
-  color: #8fb49b;
-  font-family: "SF Mono", Menlo, monospace;
-  font-size: 8px;
-}
-
-.brand-caption {
-  margin-top: 3px;
-  color: #8fb49b;
-  font-family: "SF Mono", Menlo, monospace;
-  font-size: 8px;
-}
-
-.sidebar-label-row {
-  justify-content: space-between;
-  padding: 0 8px 10px;
-  color: #9cb6a2;
-  font-size: 12px;
 }
 
 .icon-button,
@@ -192,55 +152,6 @@ button {
 .copy-button:hover,
 .row-action:hover {
   background: rgba(25, 71, 59, 0.08);
-}
-
-.project-list {
-  display: grid;
-  gap: 5px;
-}
-
-.project-item,
-.sidebar-utility {
-  display: grid;
-  grid-template-columns: 20px 1fr auto;
-  align-items: center;
-  min-height: 40px;
-  gap: 8px;
-  width: 100%;
-  padding: 0 10px;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  background: transparent;
-  color: #c6d9c9;
-  text-align: left;
-}
-
-.project-item.ant-btn,
-.sidebar-utility.ant-btn {
-  justify-content: initial;
-}
-
-.project-item small {
-  color: #8fb49b;
-  font-family: "SF Mono", Menlo, monospace;
-}
-
-.project-item-active {
-  border-color: rgba(168, 210, 178, 0.22);
-  background: #285e4d;
-  color: #ffffff;
-}
-
-.sidebar-bottom {
-  display: grid;
-  gap: 4px;
-  margin-top: auto;
-}
-
-.sidebar-utility {
-  grid-template-columns: 20px 1fr;
-  color: #a6c0ad;
-  font-size: 12px;
 }
 
 .workspace {
@@ -507,14 +418,6 @@ h2 {
 .apifox-panel-head strong {
   color: #284739;
   font-size: 13px;
-}
-
-.sync-mode {
-  display: flex;
-  padding: 2px;
-  border: 1px solid #d2ddd2;
-  border-radius: 4px;
-  background: #ffffff;
 }
 
 .apifox-form {
@@ -1124,13 +1027,6 @@ code {
   color: #3a5544;
   font-family: "SF Mono", Menlo, monospace;
   font-size: 11px;
-}
-
-.match-mode {
-  gap: 5px;
-  color: #688072;
-  font-family: "SF Mono", Menlo, monospace;
-  font-size: 10px;
 }
 
 .target-cell {

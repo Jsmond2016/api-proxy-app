@@ -51,7 +51,7 @@ function App() {
   async function confirmClose() {
     allowCloseRef.current = true;
     const { getCurrentWindow } = await import("@tauri-apps/api/window");
-    await getCurrentWindow().close();
+    await getCurrentWindow().destroy();
   }
 
   async function loadSnapshot() {

@@ -50,13 +50,6 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
   const tabItems = props.profiles.map((profile) => ({ key: profile.id, label: <span className="project-tab-label"><span>{profile.name}</span><small>{profile.rules.length}</small></span> }));
   return (
     <header className="project-sidebar">
-      <div className="brand-lockup">
-        <div className="brand-mark">A</div>
-        <div className="brand-copy">
-          <div className="brand-title-row"><p className="brand-name">APIFOX PROXY</p><span className="brand-version">v{props.appVersion}</span></div>
-          <p className="brand-caption">WECHAT DEVTOOLS</p>
-        </div>
-      </div>
       <div className="project-tabs-bar">
         <span className="project-tabs-title">联调项目</span>
         <Tabs activeKey={props.activeProfileId || undefined} items={tabItems} onChange={(id) => { void props.onSelect(id); }} />

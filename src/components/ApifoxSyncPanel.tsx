@@ -106,7 +106,7 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
 
   return (
     <>
-      <Button className="config-entry-button" icon={<RefreshCw size={15} />} onClick={() => setOpen(true)} type="primary">{apifoxEntryLabel(props.profile)}</Button>
+      <Button className="command-button" icon={<RefreshCw size={15} />} onClick={() => setOpen(true)} type="primary">{apifoxEntryLabel(props.profile)}</Button>
       <Modal className="apifox-sync-modal" footer={null} modalRender={(node) => <div onWheel={(event) => event.stopPropagation()}>{node}</div>} onCancel={() => setOpen(false)} open={open} title="连接并同步 Apifox 接口" width={680}>
         <section className="apifox-sync-panel apifox-modal-scroll" onWheel={(event) => event.stopPropagation()}>
           <div className="apifox-panel-head">

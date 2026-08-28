@@ -403,6 +403,8 @@ Content-Type: application/json
 | 2026-08-28 | 完成 R27-R28 | R27、R28 | GPT-5 Codex | Mock 接口标题增加排查 Tooltip；测试按钮受全局 Mock 开关约束；测试弹框增加格式化响应、请求信息、错误信息及 Mock 跳转/关闭操作 |
 | 2026-08-28 | 提议 R29：移除左侧菜单并以 Tabs 管理多个联调项目 | 用户要求参考项目的单主面板交互；将项目导航、创建、编辑、删除迁移到主面板顶部 Tabs，保留当前 Profile 切换时的代理监听生命周期和规则数据联动；等待确认 | R29 | GPT-5 Codex |
 | 2026-08-28 | 用户通过 `ac` 确认并完成 R29 | R29 | GPT-5 Codex | `ProjectSidebar` 改为顶部 Tabs 项目栏，单列主面板承载所有工作区；新增、编辑、删除入口和项目切换命令保持不变 |
+| 2026-08-28 | 提议 R30：测试弹框“去 Mock 接口”改跳 Apifox 配置页 | 当前按钮误用 `rule.target`，会打开 Mock 请求地址；改用 `rule.apifoxWebUrl`，无可靠链接时禁用按钮并提示 | R30 | GPT-5 Codex |
+| 2026-08-28 | 完成 R30 | R30 | GPT-5 Codex | 测试弹框按钮改用 `apifoxWebUrl` 跳转 Apifox 接口设置页；无链接时禁用并保留提示 |
 
 ## 验证结果
 

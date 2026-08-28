@@ -6,7 +6,6 @@ import type { ProfileInput, ProjectProfile } from "../types";
 interface ProjectSidebarProps {
   profiles: ProjectProfile[];
   activeProfileId: string | null;
-  appVersion: string;
   disabled: boolean;
   onCreate: (input: ProfileInput) => Promise<void>;
   onDelete: (profileId: string) => Promise<void>;

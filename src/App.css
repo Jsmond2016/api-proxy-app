@@ -268,11 +268,17 @@ button {
 }
 
 .proxy-title-row {
-  gap: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
   margin-top: 8px;
 }
 
 .proxy-title-row h1 { color: #f1f7f2; font-size: 24px; }
+.proxy-title-copy { flex: 1; min-width: 0; }
+.header-version { margin-left: 8px; color: #8fb49b; font-family: "SF Mono", Menlo, monospace; font-size: 11px; font-weight: 600; vertical-align: middle; }
+.proxy-title-row .status-indicator { flex: 0 0 auto; }
 
 h1,
 h2,

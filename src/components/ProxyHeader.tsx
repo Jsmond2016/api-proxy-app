@@ -5,13 +5,14 @@ interface ProxyHeaderProps {
   profile: ProjectProfile;
   status: ProxyStatus;
   globalMockEnabled: boolean;
+  appVersion: string;
 }
 
-export function ProxyHeader({ status, globalMockEnabled }: ProxyHeaderProps) {
+export function ProxyHeader({ status, globalMockEnabled, appVersion }: ProxyHeaderProps) {
   return (
     <header className="proxy-header">
       <div className="proxy-header-content">
-        <div className="proxy-title-row"><div className="header-brand"><div className="brand-mark">A</div><p className="header-brand-name">APIFOX PROXY</p></div><h1>微信开发者工具代理</h1><Badge className={statusClass(status)} status={badgeStatus(status)} text={status} /></div>
+        <div className="proxy-title-row"><div className="header-brand"><div className="brand-mark">A</div><p className="header-brand-name">APIFOX PROXY</p></div><div className="proxy-title-copy"><h1>微信开发者工具代理 <span className="header-version">v{appVersion}</span></h1></div><Badge className={statusClass(status)} status={badgeStatus(status)} text={status} /></div>
         <p>{statusCopy(status, globalMockEnabled)}</p>
       </div>
     </header>

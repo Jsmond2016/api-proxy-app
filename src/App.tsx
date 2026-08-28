@@ -134,7 +134,8 @@ function App() {
           snapshot={snapshot}
           apply={apply}
           execute={execute}
-          projectNavigation={{ activeProfileId: snapshot.activeProfileId, appVersion, disabled: snapshot.proxyStatus === "starting", profiles: snapshot.profiles, onCreate: (input) => apply(desktop.createProfile(input), "创建项目"), onDelete: (id) => apply(desktop.deleteProfile(id), "删除项目"), onSelect: (id) => apply(desktop.setActiveProfile(id), "切换项目"), onUpdate: (input) => apply(desktop.updateProfile(input), "更新项目") }}
+          appVersion={appVersion}
+          projectNavigation={{ activeProfileId: snapshot.activeProfileId, disabled: snapshot.proxyStatus === "starting", profiles: snapshot.profiles, onCreate: (input) => apply(desktop.createProfile(input), "创建项目"), onDelete: (id) => apply(desktop.deleteProfile(id), "删除项目"), onSelect: (id) => apply(desktop.setActiveProfile(id), "切换项目"), onUpdate: (input) => apply(desktop.updateProfile(input), "更新项目") }}
           validateApifox={validateApifox}
         />
         <DiagnosticPanel entries={diagnostics} onClear={() => setDiagnostics([])} snapshot={snapshot} />
@@ -157,6 +158,7 @@ interface WorkspaceProps {
   execute: (action: Promise<unknown>, label: string) => Promise<void>;
   validateApifox: typeof desktop.validateApifox;
   projectNavigation: ComponentProps<typeof ProjectSidebar>;
+  appVersion: string;
 }
 
 function Workspace(props: WorkspaceProps) {
@@ -176,7 +178,7 @@ function Workspace(props: WorkspaceProps) {
   }
   return (
     <>
-      <ProxyHeader globalMockEnabled={profile.globalMockEnabled} profile={profile} status={props.snapshot.proxyStatus} />
+      <ProxyHeader appVersion={props.appVersion} globalMockEnabled={profile.globalMockEnabled} profile={profile} status={props.snapshot.proxyStatus} />
       <ProjectSidebar {...props.projectNavigation} />
       <div className="workspace-grid">
         <ConnectionGuide certificate={props.snapshot.certificate} hasTraffic={props.snapshot.logs.length > 0} profile={profile} proxyStatus={props.snapshot.proxyStatus} />

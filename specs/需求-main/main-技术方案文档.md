@@ -6,7 +6,7 @@
 
 ## 方案概览
 
-本方案将当前 UI 原型重构为具备真实闭环的 Tauri 2 桌面代理。React 负责项目、Apifox、Tag、规则、证书和日志工作台；Rust 负责版本化配置、Apifox OpenAPI 导出、规则编译、HTTP/HTTPS 代理、CA 管理和事件推送。
+本方案对应当前 `0.1.23` 的 Tauri 2 桌面代理实现。React 负责项目、在线 Apifox、Tag、Mock 接口、证书和日志工作台；Rust 负责版本化配置、Apifox OpenAPI 导出、规则编译、HTTP/HTTPS 代理、CA 管理和事件推送。参考交互项目为 `/Users/huangjing/Desktop/MyCode/github/api_proxy_tool_ext`，但桌面版不依赖浏览器扩展。
 
 实现按最小可验证增量推进：先建立真实配置和安全状态模型，再接通 Apifox/Tag，再修复代理匹配与实时事件，最后完成 CA、微信开发者工具和打包验收。任何阶段都不得以静态演示数据代替真实结果。
 
@@ -50,7 +50,7 @@ Rust Application Services
 | 需求 ID | 开发方案 | 影响范围 | 使用模型 | 验证方式 | 状态 |
 | --- | --- | --- | --- | --- | --- |
 | R1 | 新增 Project CRUD commands 和编辑表单；删除硬编码演示档案；校验域名、路径前缀和端口；持久化真实项目 | `model/config/commands`、项目侧栏和项目设置组件 | GPT-5 Codex | Rust 配置测试、前端交互测试、重启恢复测试 | 已确认 |
-| R2 | `ApifoxService` 区分 online/local；online 按参考项目发送带版本头和 Bearer Token 的 POST；local GET 完整 URL；统一校验 OpenAPI | `apifox.rs`、Apifox 配置 UI、错误模型 | GPT-5 Codex | mock server 契约测试、错误分支测试、真实账号人工验证 | 已确认 |
+| R2 | `ApifoxService` 按参考项目发送带版本头和 Bearer Token 的在线 POST 导出请求；校验 OpenAPI 并返回 Tag/接口摘要；前端仅暴露在线模式 | `apifox.rs`、Apifox 配置 UI、错误模型 | GPT-5 Codex | mock server 契约测试、错误分支测试、真实账号人工验证 | 已确认 |
 | R3 | 使用 Keychain 服务保存每 Profile 的 Access/Mock Token；目标 URL 使用结构化 Query 合并追加 `apifoxToken`；所有输出脱敏 | 新增 `credentials.rs`、`Cargo.toml`、代理改写和配置 UI | GPT-5 Codex | Keychain 读写删除测试、序列化无凭据断言、日志脱敏测试 | 已废弃：由 R15 替代 |
 | R4 | 解析 OpenAPI 顶层及 operation tags；提供 Tag 搜索多选和历史；规则以 operation/source ID 稳定标识；同步前计算 diff | `apifox/rules/config`、Tag 同步对话框 | GPT-5 Codex | fixture、diff、刷新保留自定义规则测试 | 已确认：同步策略部分由 R18 替代 |
 | R5 | 新增 `activeTags`，与 `syncedTags` 分离；Tag 控件调用 Rust command 原子更新；编译规则时同时判断 active tag 和 rule enabled | 数据模型、RuleService、Tag 控件、状态摘要 | GPT-5 Codex | 多 Tag 激活矩阵测试、切换后即时命中测试 | 已废弃：由 R13 替代 |
@@ -64,11 +64,11 @@ Rust Application Services
 | R14 | 在 Profile 增加独立 `globalMockEnabled`；新增原子切换 command；代理匹配在 host/path 后、rule 前判断全局状态；规则区用单个 Switch 展示并切换，移除逐条循环批量更新；迁移缺失字段的现有 Profile 为 `true`，新建 Profile 为 `false` | `model.rs`、`state.rs`、`commands.rs`、`lib.rs`、`proxy/mod.rs`、`types.ts`、`desktop.ts`、`App.tsx`、`RuleTable.tsx`、`App.css` | GPT-5 Codex | 迁移默认值、全局关闭透传、逐接口状态保持、前端构建、HTTP/HTTPS E2E | 已确认 |
 | R15 | 将 Access/Mock Token 字段迁入 `ApifoxConnection` 并随 Profile JSON 持久化；移除 `keyring` 依赖和 `credentials.rs` 调用；同步请求传入非空值时覆盖配置，留空时复用已存值；代理从 Profile 配置读取并支持运行时热更新；前端初始化及 Profile 切换时回显 | `model.rs`、`commands.rs`、`proxy/mod.rs`、`state.rs`、`Cargo.toml`、`ApifoxSyncPanel.tsx`、`types.ts`、使用文档 | GPT-5 Codex | 配置重载、留空复用、覆盖更新、代理 Query、日志脱敏、无 Keychain API 源码断言、全量构建/E2E | 已确认 |
 | R16 | 使用 `url::Url` 结构化生成规则目标：先拼接 path，再合并 `apifoxToken`；同步后遍历所有 Apifox 来源规则刷新 Token 参数；代理改写在合并原请求 Query 后用当前配置 Token 覆盖同名参数；空 Mock Token 时不追加 | `apifox.rs`、`commands.rs`、`proxy/mod.rs`、规则测试和 E2E | GPT-5 Codex | 规则目标后缀、URL 编码、跨 Tag Merge 刷新、旧 Token 覆盖、日志脱敏、HTTP/HTTPS E2E | 已确认 |
-| R17 | `.log-stream` 使用固定 `height: 360px`、`overflow-y: auto`、稳定滚动条空间和滚动边界；section heading 保持列表之外；空态在固定视口内展示 | `App.css`、`RequestLogPanel.tsx`（仅必要时增加语义属性） | GPT-5 Codex | 前端构建、源码约束、桌面宽度与窄视口布局检查 | 已确认 |
-| R18 | 删除前端 `SyncStrategy`、策略状态和选择器，Apifox 请求契约不再接收 strategy，Rust 预览与同步统一执行 Replace：删除旧 Apifox 来源规则后写入本次 Tag 结果，Custom/Imported 规则不变；从 `x-run-in-apifox` 解析并规范化 Web 接口页，持久化到带默认空值的规则字段，在线项目缺失直链时仅按数字 API ID + 项目 ID生成兜底；规则路径使用 Tauri opener 打开系统默认浏览器；`.rule-table-wrap` 固定 `420px`、纵向滚动、表头 sticky，Request/Target 单元格设置列宽及 `overflow-wrap: anywhere` | `model.rs`、`apifox.rs`、`commands.rs`、`types.ts`、`ApifoxSyncPanel.tsx`、`RuleTable.tsx`、`App.css`、使用文档和测试 | GPT-5 Codex | Replace 预览/同步测试、自定义规则保留、直链规范化/兜底/无效链接测试、前端构建、源码约束、桌面与窄视口人工检查 | 已确认 |
+| R17 | `.log-stream` 在有数据时固定 `360px` 并内部滚动；无数据使用紧凑 `Empty`，避免空白撑高 | `App.css`、`RequestLogPanel.tsx` | GPT-5 Codex | 前端构建、源码约束、桌面宽度与窄视口布局检查 | 已确认 |
+| R18 | 删除前端 `SyncStrategy`，Rust 预览与同步统一执行 Replace：删除旧 Apifox 来源规则后写入本次 Tag 结果，Custom/Imported 规则不变；解析并规范化 `x-run-in-apifox` Web 链接；规则路径使用 Tauri opener 打开浏览器；Mock 接口表格使用 Ant Design Table 自适应高度，长内容换行 | `model.rs`、`apifox.rs`、`commands.rs`、`types.ts`、`ApifoxSyncPanel.tsx`、`RuleTable.tsx`、`App.css` | GPT-5 Codex | Replace 预览/同步测试、自定义规则保留、链接规范化/无效链接测试、前端构建、源码约束、桌面与窄视口人工检查 | 已确认 |
 | R19 | 复核现有 `delete_rule` 的共享 snapshot 更新和持久化链路，将操作列扩宽并为两个图标保留稳定尺寸；新增 `clear_rules(profileId)` 原子命令，清空 rules/syncedTags/兼容 activeTags 后持久化，运行中的 handler 因共享 snapshot 立即读取新状态；RuleTable 增加应用内重置确认框并通过统一 `apply` 显示 Toast；标题左侧组合 `h2 + search`，右侧仅保留全局开关、添加和重置，删除 kicker | `commands.rs`、`lib.rs`、`desktop.ts`、`App.tsx`、`RuleTable.tsx`、`App.css`、测试和使用文档 | GPT-5 Codex | 单条删除/全量清空持久化测试、运行态匹配回归、确认框/Toast 源码检查、前端构建和桌面布局检查 | 已确认 |
 | R20 | 接入 Ant Design 6 `ConfigProvider` 中文紧凑主题；以 `Button/Input/Select/Switch/Table/Form/Modal/Popconfirm/Tooltip/Alert/Empty/message` 替换手写基础组件；使用 `classnames` 管理状态类名并保留现有布局 CSS | `package.json`、`main.tsx`、`App.tsx`、全部工作台组件、`App.css` | GPT-5 Codex | 前端构建、源码约束、原生控件扫描、桌面与窄视口视觉检查 | 已确认 |
-| R21 | `ProxyHeader` 删除重复地址块；新增紧凑的配置操作条，使用 `Button` 展示 Apifox 连接摘要和 CA 信任摘要；`ApifoxSyncPanel` 与 `CertificatePanel` 改为受控 `Modal`，内部保留全部原有字段、验证、预览、同步及证书命令；`ConnectionGuide` 继续作为唯一代理地址与接入状态区；关闭弹框不清除 Profile 已保存字段，切换 Profile 时按现有逻辑重置为对应配置 | `App.tsx`、`ProxyHeader.tsx`、`ApifoxSyncPanel.tsx`、`CertificatePanel.tsx`、`ConnectionGuide.tsx`、`App.css` | GPT-5 Codex | 前端构建、源码约束、弹框开关/回显/操作源码检查、桌面与窄视口布局检查、Rust 回归 | 已确认 |
+| R21 | `ProxyHeader` 删除重复地址块；新增紧凑配置操作条，使用 `Button` 展示在线 Apifox 连接摘要和 CA 信任摘要；`ApifoxSyncPanel` 与 `CertificatePanel` 改为受控 `Modal`，关闭后保留 Profile 字段回显；`ConnectionGuide` 继续作为唯一代理地址与接入状态区 | `App.tsx`、`ProxyHeader.tsx`、`ApifoxSyncPanel.tsx`、`CertificatePanel.tsx`、`ConnectionGuide.tsx`、`App.css` | GPT-5 Codex | 前端构建、源码约束、弹框开关/回显/操作源码检查、桌面与窄视口布局检查、Rust 回归 | 已确认 |
 | R22 | 统一规则区用户文案为“Mock 接口”；新增 `resolve_openapi_operation` 或等价 Tauri command，复用在线/本地 OpenAPI 获取与解析逻辑，按规范化 URL pathname、Method 执行精确优先和唯一模糊匹配并返回规则输入字段；新增接口 Drawer/Modal 以空值初始化，URL 第一项在 blur 时调用解析，唯一命中后回填，歧义/未命中使用 `message` 提示；编辑保持现有值回显 | `apifox.rs`、`commands.rs`、`lib.rs`、`model.rs`、`desktop.ts`、`types.ts`、`RuleTable.tsx`、测试 | GPT-5 Codex | 解析精确/模糊/歧义/未命中/Token 目标测试、前端构建、源码约束、表单初始化与回填交互检查、HTTP/HTTPS 回归 | 已确认 |
 | R23 | 将 `ApifoxSyncPanel` 的 Ant Design `Form` 调整为纵向单列，每个字段和验证操作独占一行并收窄弹框宽度；通过桌面 API 读取 Tauri 应用版本，Web 预览使用由 Vite 从 `package.json` 注入的构建期版本回退值，传入 `ProjectSidebar` 后在品牌标题右侧低权重展示；将 `App` 的接入区改为上下两行，第一行保留 `ConnectionGuide`，第二行单独排列 Apifox 与证书入口 | `vite.config.ts`、`desktop.ts`、`App.tsx`、`ProjectSidebar.tsx`、`ApifoxSyncPanel.tsx`、`App.css` | GPT-5 Codex | 前端构建、源码约束、版本来源扫描、桌面与窄视口布局检查、Rust 回归 | 已确认 |
 | R24 | 在 `AppState::load` 将所有 Profile 的 `global_mock_enabled` 重置为 `false` 并持久化安全启动状态；Tauri `setup` 完成状态注册后，若存在活动 Profile 则异步启动 loopback listener；将代理启停能力收敛为内部生命周期服务，Profile 创建、切换、活动端口修改和活动 Profile 删除通过统一 restart/ensure-running 流程切换监听，移除 `ensure_proxy_stopped` 对用户配置操作的阻断；`RuleProxyHandler` 继续在 `global_mock_enabled=false` 时直接 miss 并透传，开启后才匹配启用规则；删除 `ProxyHeader` 手动启停按钮和前端 start/stop 回调，改为展示“端口监听中 · 全量透传/按规则 Mock”状态，保留规则区“全局 Mock”Switch 作为唯一业务开关；无 Profile 时保持无监听，绑定失败进入 error 并在初始化/诊断区明确提示；版本升级至 0.1.10 | `state.rs`、`proxy/mod.rs`、`commands.rs`、`lib.rs`、`App.tsx`、`ProxyHeader.tsx`、`ConnectionGuide.tsx`、`RequestLogPanel.tsx`、`desktop.ts`、测试、文档和版本文件 | GPT-5 Codex | Rust 启动自动监听测试、启动强制透传测试、HTTP/HTTPS 透传与 Mock E2E、全局开关状态保持测试、Profile/端口切换自动重启测试、端口冲突错误测试、前端构建与源码约束、0.1.10 DMG 安装验收 | 已确认 |
@@ -102,9 +102,8 @@ ProjectProfile {
 }
 
 ApifoxConfig {
-  mode: Online | Local,
+  mode: Online,
   project_id: Option<String>,
-  local_openapi_url: Option<String>,
   mock_prefix: String,
   access_token: String,
   mock_token: String,
@@ -180,9 +179,9 @@ Content-Type: application/json
 }
 ```
 
-### 本地模式
+### 本地模式（已废弃）
 
-对用户配置的完整 URL 发 GET，设置合理连接/响应超时，只接受 HTTP 成功且包含 `openapi` 或 `swagger` 与 `paths` 的 JSON。
+早期方案曾允许读取用户配置的本地 OpenAPI URL；为与参考项目及当前产品交互保持一致，`0.1.23` 前端已移除 Local 模式入口，在线 Apifox 项目是唯一支持的连接方式。Rust 数据模型保留必要兼容字段时，不得在新 UI 中重新暴露该能力。
 
 ### Tag 与同步语义
 
@@ -379,7 +378,7 @@ Content-Type: application/json
 | 2026-08-27 | 提议 R18：同步固定为 Replace，规则表固定高度并让请求/目标换行，请求路径增加 Apifox Web 外链 | R4、R6、R18 | GPT-5 Codex | 移除无实际场景的策略选择，对齐参考项目跳转能力并控制规则表尺寸；等待确认 |
 | 2026-08-27 | 用户通过 `ac` 确认 R18，开始实现单一 Replace 契约与规则表交互 | R4、R6、R18 | GPT-5 Codex | 每次同步重建 Apifox 规则并重置其逐接口状态；Custom/Imported 规则不变 |
 | 2026-08-27 | 提议 R19：修复被窄列裁切的删除入口，增加清空当前 Profile 全部规则的重置操作，并重排标题与搜索框 | R6、R19 | GPT-5 Codex | 重置属于有确认提示的破坏性操作，保留连接与全局配置；等待确认 |
-| 2026-08-27 | 完成 R18：删除同步策略契约，固定 Replace；新增 Apifox Web 地址解析/持久化/系统浏览器跳转；规则表固定 420px、表头固定、请求和目标换行，操作列扩宽 | R4、R6、R18 | GPT-5 Codex | 同步交互收敛为单一路径，长 URL 不再撑宽列表，可从请求路径进入 Apifox 接口页；操作列不再裁切删除图标 |
+| 2026-08-27 | 完成 R18：删除同步策略契约，固定 Replace；新增 Apifox Web 地址解析/持久化/系统浏览器跳转；早期实现曾使用 420px 规则表视口 | R4、R6、R18 | GPT-5 Codex | 后续 R33 已改为 Ant Design Table 自适应高度；长 URL 换行，操作列不再裁切删除图标 |
 | 2026-08-27 | 用户通过 `ac` 确认 R19，开始实现规则重置命令和标题操作区 | R6、R19 | GPT-5 Codex | 重置范围固定为规则和 Tag，不改变连接、Token、Mock 前缀或全局开关 |
 | 2026-08-27 | 完成 R19：注册原子 `clear_rules` 命令和应用内确认框；搜索框移至标题旁，删除 `ROUTING RULES`，添加按钮右侧增加重置入口；操作列扩至 92px | R6、R12、R19 | GPT-5 Codex | 单条删除的两个操作图标完整可见；重置后运行态和持久化状态同时清空规则与 Tag；版本升级 0.1.6 |
 | 2026-08-27 | 完成 R20：基础控件全面迁移到 Ant Design 6，接入中文绿色主题和统一 `message` 反馈；Tag 改用多选 Select，规则改用 Table/Switch/Modal/Popconfirm，删除自制 Toast 与手写基础组件 CSS | R12、R20 | GPT-5 Codex | 保持工作台信息架构、固定滚动高度、长 URL 换行和既有业务流程；使用 `classnames`，未引入 TailwindCSS；版本升级 0.1.7 |
@@ -424,6 +423,12 @@ Content-Type: application/json
 | 2026-08-28 | 完成 R40 | R40 | GPT-5 Codex | 删除请求/匹配独立列，接口信息列按中文名称与 Method+URL 两行展示，保留 URL 外链 |
 | 2026-08-28 | 用户通过 `ac` 确认并完成 R39 | R39 | GPT-5 Codex | 品牌文案并入代理标题行，项目 Tabs 改为浅色背景；Tooltip 分点换行；搜索框扩宽；Apifox/重置按钮分别统一主色/危险色 |
 
+## 当前交付基线
+
+- 版本：`0.1.23`，最新提交：`40fb574 feat(safety): 增加关闭应用前代理还原提醒`。
+- 已实现并完成代码级验证：项目 Tabs/CRUD、在线 Apifox Tag Replace 同步、Mock Token、HTTP/HTTPS 代理、全局与单接口 Mock 门控、规则测试/编辑/删除/重置、实时请求记录、真机模拟提示词、Ant Design 工作台和关闭提醒。
+- 明确边界：仅支持在线 Apifox 模式；不自动修改微信开发者工具或 macOS 系统代理；不绕过证书固定；真实微信开发者工具和真实 Apifox 账号仍需用户按使用与验收文档人工验收。
+
 ## 验证结果
 
 | 日期 | 验证项 | 结果 | 说明 |
@@ -452,6 +457,7 @@ Content-Type: application/json
 | 2026-08-28 | R24 自动监听与安全透传 | 通过 | Rust 27 项测试全部通过；`pnpm build`、`pnpm run check:source`、`cargo check`、`cargo fmt --check`、`git diff --check` 通过；新增启动重置全局 Mock 测试，HTTP/HTTPS E2E 回归通过 |
 | 2026-08-28 | R25 在线弹框与滚轮隔离 | 通过（自动视觉检查受限） | `pnpm build`、`pnpm run check:source`、`cargo check`、`cargo fmt --check`、`git diff --check` 通过；当前无可用浏览器连接，未执行自动截图与滚轮人工验收 |
 | 2026-08-28 | R26 Mock 接口测试与单接口调试 | 通过（自动视觉检查受限） | `pnpm build`、`pnpm run check:source`、`git diff --check` 通过；当前无可用浏览器连接，未执行桌面点击和真实 Mock 请求人工验收 |
+| 2026-08-28 | 0.1.23 最终交付基线 | 通过 | 最新 DMG 为 `src-tauri/target/release/bundle/dmg/Apifox Proxy_0.1.23_aarch64.dmg`；`hdiutil verify` 通过，SHA-256 `d452af3b8ba71e94e5ac1ad80729c05bfd9eb7b8d299e7cecb6acbda135e6007`；代码级验证沿用前述构建、源码检查、Rust 检查和 E2E 证据 |
 | 2026-08-27 | 0.1.9 用户安装验收 | 通过 | 用户确认验证通过并要求提交当前实现 |
 | 2026-08-27 | 微信开发者工具真实项目人工验收 | 待用户执行 | 需要用户的真实源域名、Apifox 项目、Token 和微信开发者工具环境；按 `main-使用与验收文档.md` 验收 |
 # R20 Ant Design UI 迁移方案
@@ -470,7 +476,7 @@ Content-Type: application/json
 | 原生按钮与图标按钮 | `Button`、`Tooltip` | 命令层级、图标、禁用与 loading 状态 |
 | 原生输入框、数字框、下拉框 | `Input`、`InputNumber`、`Select`、`Segmented` | 字段文案、回显、校验和 Tag 选择流程 |
 | 手写开关 | `Switch` | 全局 Mock 与单接口启停语义 |
-| 原生表格 | `Table` | 420px 规则视口、固定列宽、长 URL 换行和操作列 |
+| 原生表格 | `Table` | Mock 接口表格自适应高度、固定列宽、长 URL 换行和操作列；请求记录单独使用 360px 内部滚动视口 |
 | 手写遮罩弹窗与确认框 | `Modal`、`Popconfirm` | 创建/编辑/删除/重置的确认流程 |
 | 自制 Toast | `App.useApp()` / `message` | 所有成功和失败反馈，错误内容脱敏 |
 | 手写空状态与状态标签 | `Empty`、`Alert`、`Badge`、`Tag` | 紧凑信息展示和原有状态语义 |

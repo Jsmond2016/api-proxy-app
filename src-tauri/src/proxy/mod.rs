@@ -13,7 +13,7 @@ use hudsucker::{
     },
     rcgen::{Issuer, KeyPair},
     rustls::crypto::aws_lc_rs,
-        Body, HttpContext, HttpHandler, Proxy, RequestOrResponse,
+    Body, HttpContext, HttpHandler, Proxy, RequestOrResponse,
 };
 use regex::Regex;
 use tauri::{AppHandle, Emitter};
@@ -35,7 +35,6 @@ struct RuleProxyHandler {
     mock_token: Arc<Mutex<Option<String>>>,
     pending_log_id: Option<String>,
     started_at: Option<Instant>,
-    pending_response: Option<String>,
 }
 
 impl RuleProxyHandler {
@@ -52,7 +51,6 @@ impl RuleProxyHandler {
             mock_token,
             pending_log_id: None,
             started_at: None,
-            pending_response: None,
         }
     }
 
@@ -69,7 +67,6 @@ impl RuleProxyHandler {
             mock_token: Arc::new(Mutex::new(mock_token)),
             pending_log_id: None,
             started_at: None,
-            pending_response: None,
         }
     }
 
@@ -99,22 +96,6 @@ impl RuleProxyHandler {
             );
             return;
         };
-
-        if !rule.custom_response_body.trim().is_empty() {
-            self.record_request(
-                method,
-                source,
-                sanitize_url(&rule.target),
-                rule.id,
-                rule.name,
-                rule.tags.first().cloned().unwrap_or_default(),
-                "matched".to_string(),
-                "custom-response".to_string(),
-            );
-            self.pending_response = Some(rule.custom_response_body);
-            self.record_custom_response();
-            return;
-        }
 
         let mock_token = self.mock_token.lock().ok().and_then(|token| token.clone());
         match rewrite_request(request, &rule, mock_token.as_deref()) {
@@ -239,25 +220,6 @@ impl RuleProxyHandler {
         }
     }
 
-    fn record_custom_response(&mut self) {
-        let Some(log_id) = self.pending_log_id.as_ref() else {
-            return;
-        };
-        let Ok(mut snapshot) = self.snapshot.lock() else {
-            return;
-        };
-        let Some(log) = snapshot.logs.iter_mut().find(|log| &log.id == log_id) else {
-            return;
-        };
-        log.response_code = Some(StatusCode::OK.as_u16());
-        if let Some(started_at) = self.started_at {
-            log.duration = elapsed_millis(started_at);
-        }
-        if let Some(app) = &self.app {
-            let _ = app.emit("proxy://request", log.clone());
-        }
-    }
-
     fn record_failure(&mut self, stage: &str) {
         let Some(log_id) = self.pending_log_id.as_ref() else {
             return;
@@ -318,18 +280,7 @@ impl HttpHandler for RuleProxyHandler {
         mut request: Request<Body>,
     ) -> impl Future<Output = RequestOrResponse> + Send {
         self.inspect_request(&mut request);
-        let custom_body = self.pending_response.take();
-        async move {
-            if let Some(body) = custom_body {
-                return Response::builder()
-                    .status(StatusCode::OK)
-                    .header("content-type", "application/json; charset=utf-8")
-                    .body(Body::from(body))
-                    .expect("custom response should be valid")
-                    .into();
-            }
-            request.into()
-        }
+        async move { request.into() }
     }
 
     fn handle_response(
@@ -838,7 +789,6 @@ mod tests {
             path: path.to_string(),
             match_mode: mode,
             target: format!("https://mock.example.test/mock{path}"),
-            custom_response_body: String::new(),
             enabled: true,
             tags: vec!["订单".to_string()],
             priority: 100,

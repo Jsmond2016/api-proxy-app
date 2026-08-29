@@ -78,7 +78,6 @@ Rust Application Services
 | R47 | `RuleActions` 维护响应搜索匹配总数与当前索引；搜索词变化时重置索引并定位首个 `<mark>`，上/下按钮及 Enter/Shift+Enter 按循环索引切换，当前匹配使用独立样式并滚动到可视区域；搜索无结果时导航禁用 | `RuleTable.tsx`、`App.css` | GPT-5 Codex | 前端构建、源码约束、搜索导航/键盘事件源码检查、桌面多匹配响应人工验收 | 已确认 |
 | R48 | `Workspace` 在 `activeProfile=null` 时先渲染 `ProjectSidebar`，再展示紧凑空状态；复用既有 `ProfileDialog` 创建流程与 `profiles.length <= 1` 删除保护，不新增后端数据契约 | `App.tsx`、`ProjectSidebar.tsx`、`App.css` | GPT-5 Codex | 空配置首屏源码检查、前端构建、源码约束、创建首个项目人工验收 | 已确认 |
 | R49 | 为 `apply` 增加可选静默反馈参数；`Workspace.debugSingle` 的多步 `setGlobalMockEnabled`/`setRuleEnabled` 调用关闭逐步成功 Toast，全部完成后由工作区统一发送一条成功提示；移除 `RuleActions` 对该回调的重复成功/失败提示，错误继续由 `apply` 统一上报 | `App.tsx`、`RuleTable.tsx` | GPT-5 Codex | 复合操作 Toast 调用链检查、前端构建、源码约束、桌面人工点击验证 | 已确认 |
-| R50 | `ProxyRule`/`RuleInput` 增加 `custom_response_body`（serde 默认空字符串）并在 `build_custom_rule` 持久化；`RuleProxyHandler` 命中规则后若响应体非空则构造 200 响应并跳过 `rewrite_request`，否则保持 Apifox 转发；`RuleDialog` 移除 Tags/优先级，新增 textarea 和可编辑搜索导航，保存时提交自定义响应体 | `model.rs`、`commands.rs`、`proxy/mod.rs`、`types.ts`、`RuleTable.tsx`、`App.css` | GPT-5 Codex | Rust 单测/检查、前端构建、源码约束、旧配置反序列化和自定义响应优先级测试 | 已确认 |
 | R51 | 将 `set_global_mock_enabled` 改为异步命令：持久化开关后调用 `proxy::restart_proxy`，停止当前监听、等待端口释放并重新启动；新连接读取最新共享快照，关闭时仍按全局门控透传 | `commands.rs`、`proxy/mod.rs`、`lib.rs`、测试 | GPT-5 Codex | Rust 单测、HTTP/HTTPS 代理回归、前端构建、源码约束和开关切换后重新请求人工验收 | 已确认 |
 | R52 | `RuleProxyHandler::should_intercept_connect`/`should_intercept_tls` 改为仅校验活动 Profile 存在并始终建立 MITM；`matching_rule` 继续在请求层检查 `global_mock_enabled`，关闭时返回 miss 并透传；保留 CA 信任诊断和 HTTP/HTTPS 请求日志 | `proxy/mod.rs`、测试、文档 | GPT-5 Codex | Rust 单测、HTTPS 连接复用场景回归、前端构建、源码约束和桌面人工验收 | 已确认 |
 | R12 | 建立 Rust 单元/集成、前端测试和本地双 upstream E2E；更新 README/使用文档；构建并校验 arm64 app/dmg | tests、scripts、docs、Tauri bundle | GPT-5 Codex | `pnpm build`、`check:source`、`cargo test`、E2E、codesign、hdiutil | 已确认 |
@@ -472,14 +471,13 @@ Content-Type: application/json
 | 2026-08-28 | 0.1.28 响应搜索多匹配导航交付包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；`hdiutil verify` 通过，SHA-256 `6556fdf8b425b904ef7770d9213cc603bf922ece4588fef467c820d729baef41` |
 | 2026-08-28 | 0.1.29 无项目创建入口修复交付包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；`hdiutil verify` 通过，SHA-256 `719b3009f3242e94202615f0e378a53b78dfdefb3fab69f9c91cdbf323cc736a` |
 | 2026-08-28 | 0.1.30 复合操作单次反馈修复交付包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；`hdiutil verify` 通过，SHA-256 `5afda4579c0833276e6e2f321bef313c63c582b64a869ef53d0e3b39880db846` |
-| 2026-08-28 | 0.1.31 自定义响应体交付包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；`hdiutil verify` 通过，SHA-256 `488e8beccaa26c075cbe13a75a665863e5b6d4c56597dea627c442b0be115b90` |
 | 2026-08-28 | 0.1.32 全局 Mock 切换重建连接修复包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；`hdiutil verify` 通过，SHA-256 `0509ae921a6f6d53bc97ef34e85bc433b72b34e2d03e0df651e81178c47445dd` |
 | 2026-08-28 | 0.1.33 HTTPS 隧道常驻 MITM 修复包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；`hdiutil verify` 通过，SHA-256 `889e66d8bdd93a9d1554c976f2e6c44f2f565f25971940d5879d2370b5253ab1` |
+| 2026-08-29 | 0.1.34 移除自定义响应体并优化体积 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；启用 Rust release 体积优化后 DMG 为 5,459,586 bytes，`hdiutil verify` 通过，SHA-256 `3bb5b923c0e464c5184f02df933af7d41ec5800c4d3c0dc46f29359a0e380f5d` |
 | 2026-08-28 | 完成 R46 测试响应搜索与弹框操作调整 | 通过构建验证 | 测试弹框移除重复“关闭”按钮，“去 Mock 接口”固定右侧；响应内容增加搜索框、`Ctrl/Cmd+F` 聚焦、匹配高亮、首个匹配自动滚动和 420px 内部滚动；`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |
 | 2026-08-28 | 完成 R47 响应搜索多匹配导航 | 通过构建验证 | 增加匹配计数、当前命中高亮、上/下循环导航及 Enter/Shift+Enter 快捷键；关键词变化重置到首个匹配；`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |
 | 2026-08-28 | 用户通过 `ac` 确认并完成 R48 无项目创建入口修复 | 通过构建验证 | 空配置时 `Workspace` 提前返回导致项目 Tabs/新建按钮不渲染；调整为空状态仍渲染项目导航，复用现有创建弹框；`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |
 | 2026-08-28 | 用户通过 `ac` 确认并完成 R49 复合操作单次反馈 | 通过构建验证 | `apply` 支持静默成功反馈；仅调试当前接口的内部开关步骤不再逐条弹 Toast，全部成功后只提示一次；按钮移除重复反馈；`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |
-| 2026-08-28 | 完成 R50 自定义响应体 | 通过构建与 Rust 检查 | 添加/编辑弹框移除 Tag 和优先级，增加可编辑响应体及搜索导航；自定义响应体命中时代理直接返回 200 并记录响应，空值继续 Apifox 转发；`cargo check`、`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |
 | 2026-08-28 | 完成 R51 全局 Mock 切换重建 HTTPS 连接 | 通过构建与 Rust 检查 | 全局开关命令改为异步，持久化后重启当前代理监听并等待端口释放，确保客户端建立新 HTTPS 隧道；`cargo check`、`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |
 | 2026-08-28 | 完成 R52 HTTPS 隧道常驻 MITM | 通过全量测试与构建 | CONNECT/TLS 拦截改为按活动项目常驻，Mock 开关仅在请求层门控；关闭时保持解密后透传，开启后可处理复用连接中的后续请求；`cargo test` 27 passed、`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |
 | 2026-08-27 | 0.1.9 用户安装验收 | 通过 | 用户确认验证通过并要求提交当前实现 |

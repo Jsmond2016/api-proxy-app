@@ -708,18 +708,6 @@ h2 {
   align-items: center;
 }
 
-.response-editor-tools {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-bottom: 7px;
-}
-
-.response-editor-tools .ant-input-affix-wrapper {
-  flex: 1;
-  min-width: 0;
-}
-
 .response-payload-heading {
   justify-content: space-between;
   gap: 12px;

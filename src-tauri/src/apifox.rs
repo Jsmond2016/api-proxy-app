@@ -216,7 +216,6 @@ pub fn build_rules(
             path: operation.path.clone(),
             match_mode,
             target: build_mock_target(prefix, &operation.path)?,
-            custom_response_body: String::new(),
             enabled: true,
             tags: operation.tags.clone(),
             priority: 100,

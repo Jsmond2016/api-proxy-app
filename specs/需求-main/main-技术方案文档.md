@@ -474,6 +474,7 @@ Content-Type: application/json
 | 2026-08-28 | 0.1.32 全局 Mock 切换重建连接修复包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；`hdiutil verify` 通过，SHA-256 `0509ae921a6f6d53bc97ef34e85bc433b72b34e2d03e0df651e81178c47445dd` |
 | 2026-08-28 | 0.1.33 HTTPS 隧道常驻 MITM 修复包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；`hdiutil verify` 通过，SHA-256 `889e66d8bdd93a9d1554c976f2e6c44f2f565f25971940d5879d2370b5253ab1` |
 | 2026-08-29 | 0.1.34 移除自定义响应体并优化体积 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；启用 Rust release 体积优化后 DMG 为 5,459,586 bytes，`hdiutil verify` 通过，SHA-256 `3bb5b923c0e464c5184f02df933af7d41ec5800c4d3c0dc46f29359a0e380f5d` |
+| 2026-08-29 | 0.1.35 发布包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；DMG 为 5,459,680 bytes，`hdiutil verify` 通过，SHA-256 `a3d837b645e8e4e87dec582ff206122affcd3829a1e5f929c0da9596ccf18c65` |
 | 2026-08-28 | 完成 R46 测试响应搜索与弹框操作调整 | 通过构建验证 | 测试弹框移除重复“关闭”按钮，“去 Mock 接口”固定右侧；响应内容增加搜索框、`Ctrl/Cmd+F` 聚焦、匹配高亮、首个匹配自动滚动和 420px 内部滚动；`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |
 | 2026-08-28 | 完成 R47 响应搜索多匹配导航 | 通过构建验证 | 增加匹配计数、当前命中高亮、上/下循环导航及 Enter/Shift+Enter 快捷键；关键词变化重置到首个匹配；`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |
 | 2026-08-28 | 用户通过 `ac` 确认并完成 R48 无项目创建入口修复 | 通过构建验证 | 空配置时 `Workspace` 提前返回导致项目 Tabs/新建按钮不渲染；调整为空状态仍渲染项目导航，复用现有创建弹框；`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |

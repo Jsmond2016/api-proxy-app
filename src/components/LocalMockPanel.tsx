@@ -1,6 +1,6 @@
 import { Button, Empty, Form, Input, InputNumber, Modal, Popconfirm, Space, Table } from "antd";
 import type { TableColumnsType } from "antd";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Copy, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { LocalMockResponse, LocalMockResponseInput } from "../types";
 
@@ -16,14 +16,15 @@ export function LocalMockPanel(props: LocalMockPanelProps) {
   const [editing, setEditing] = useState<LocalMockResponse | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [form] = Form.useForm<LocalMockResponseInput>();
-  function startCreate() { setEditing(null); form.setFieldsValue({ name: "", delayMs: 0, status: 200, body: "" }); setFormOpen(true); }
-  function startEdit(item: LocalMockResponse) { setEditing(item); form.setFieldsValue({ id: item.id, profileId: props.profileId, name: item.name, delayMs: item.delayMs, status: item.status, body: item.body }); setFormOpen(true); }
-  async function submit(values: LocalMockResponseInput) { await props.onSave({ ...values, profileId: props.profileId, delayMs: values.delayMs ?? 0, status: values.status ?? 200 }); setFormOpen(false); setEditing(null); }
+  function startCreate() { setEditing(null); form.resetFields(); form.setFieldsValue({ name: "", delayMs: 0, status: 200, body: "" }); setFormOpen(true); }
+  function startEdit(item: LocalMockResponse) { setEditing(item); form.resetFields(); form.setFieldsValue({ profileId: props.profileId, name: item.name, delayMs: item.delayMs, status: item.status, body: item.body }); setFormOpen(true); }
+  function startCopy(item: LocalMockResponse) { setEditing(null); form.resetFields(); form.setFieldsValue({ profileId: props.profileId, name: `${item.name}-copy`, delayMs: item.delayMs, status: item.status, body: item.body }); setFormOpen(true); }
+  async function submit(values: LocalMockResponseInput) { const input = { ...values, profileId: props.profileId, id: editing?.id, delayMs: values.delayMs ?? 0, status: values.status ?? 200 }; await props.onSave(input); setFormOpen(false); setEditing(null); }
   const columns: TableColumnsType<LocalMockResponse> = [
     { title: "响应名字", dataIndex: "name" },
     { title: "HTTP 状态", dataIndex: "status", width: 110 },
     { title: "延时", dataIndex: "delayMs", width: 90, render: (value) => `${value} ms` },
-    { title: "操作", key: "actions", width: 110, render: (_, item) => <Space><Button aria-label="编辑预设响应" icon={<Pencil size={14} />} onClick={() => startEdit(item)} type="text" /><Popconfirm cancelText="取消" okText="删除" onConfirm={() => props.onDelete(item.id)} title={`删除“${item.name}”？`}><Button aria-label="删除预设响应" danger icon={<Trash2 size={14} />} type="text" /></Popconfirm></Space> },
+    { title: "操作", key: "actions", width: 145, render: (_, item) => <Space><Button aria-label="编辑预设响应" icon={<Pencil size={14} />} onClick={() => startEdit(item)} type="text" /><Button aria-label="复制预设响应" icon={<Copy size={14} />} onClick={() => startCopy(item)} type="text" /><Popconfirm cancelText="取消" okText="删除" onConfirm={() => props.onDelete(item.id)} title={`删除“${item.name}”？`}><Button aria-label="删除预设响应" danger icon={<Trash2 size={14} />} type="text" /></Popconfirm></Space> },
   ];
   let formTitle = "新增预设响应";
   if (editing) formTitle = "编辑预设响应";

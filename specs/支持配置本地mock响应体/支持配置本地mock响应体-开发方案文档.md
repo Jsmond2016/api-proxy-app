@@ -68,4 +68,5 @@
 | 2026-08-31 | 版本升级与打包准备 | 已完成 | 应用版本由 0.1.36 升至 0.1.37 |
 | 2026-08-31 | macOS `.app/.dmg` 打包 | 通过 | 生成 `src-tauri/target/release/bundle/macos/Apifox Proxy.app` 与 `Apifox Proxy_0.1.37_aarch64.dmg`；DMG 5.2M，`hdiutil verify` 通过，SHA-256 `2621c25319a58e01cf1ffcab3675cc359c58ebc43fa6aaf6fda1041d67dfe22d` |
 | 2026-08-31 | 版本升级 | 已完成 | 应用版本由 0.1.37 升至 0.1.38 |
+| 2026-08-31 | 版本升级 | 已完成 | 应用版本由 0.1.38 升至 0.1.39 |
 | 2026-08-31 | 预设目标展示/测试回归 | 通过 | `pnpm build`、`pnpm run check:source`、`cargo check`、`git diff --check` 通过 |

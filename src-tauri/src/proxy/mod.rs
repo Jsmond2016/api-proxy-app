@@ -23,7 +23,8 @@ use tokio::time::{sleep, Duration};
 use url::Url;
 
 use crate::model::{
-    DesktopSnapshot, MatchMode, ProjectProfile, ProxyRule, ProxyStatus, RequestLog,
+    DesktopSnapshot, LocalMockResponse, MatchMode, ProjectProfile, ProxyRule, ProxyStatus,
+    RequestLog,
 };
 use crate::state::{AppState, ProxyRuntime};
 
@@ -279,8 +280,42 @@ impl HttpHandler for RuleProxyHandler {
         _context: &HttpContext,
         mut request: Request<Body>,
     ) -> impl Future<Output = RequestOrResponse> + Send {
-        self.inspect_request(&mut request);
-        async move { request.into() }
+        let method = request.method().as_str().to_string();
+        let host = request_host(&request);
+        let path = request.uri().path().to_string();
+        let mut local = None;
+        if let Some(rule) = self.matching_rule(&method, &host, &path).rule {
+            if let Some(response) = self.local_response(&rule) {
+                self.record_request(
+                    method,
+                    request_source(&request),
+                    "local://response".to_string(),
+                    rule.id,
+                    rule.name,
+                    String::new(),
+                    "matched".to_string(),
+                    "local-response".to_string(),
+                );
+                local = Some((response.delay_ms, response.status, response.body));
+            }
+        }
+        if local.is_none() {
+            self.inspect_request(&mut request);
+        }
+        async move {
+            if let Some((delay, status, body)) = local {
+                if delay > 0 {
+                    sleep(Duration::from_millis(delay)).await;
+                }
+                return Response::builder()
+                    .status(status)
+                    .header("content-type", "application/json; charset=utf-8")
+                    .body(Body::from(body))
+                    .expect("local response should be valid")
+                    .into();
+            }
+            request.into()
+        }
     }
 
     fn handle_response(
@@ -304,6 +339,22 @@ impl HttpHandler for RuleProxyHandler {
                 .body(Body::empty())
                 .expect("502 response should be valid")
         }
+    }
+}
+
+impl RuleProxyHandler {
+    fn local_response(&self, rule: &ProxyRule) -> Option<LocalMockResponse> {
+        let id = rule.local_response_id.as_ref()?;
+        let snapshot = self.snapshot.lock().ok()?;
+        let profile = snapshot
+            .profiles
+            .iter()
+            .find(|profile| profile.id == self.profile_id)?;
+        profile
+            .local_responses
+            .iter()
+            .find(|item| &item.id == id)
+            .cloned()
     }
 }
 
@@ -775,6 +826,7 @@ mod tests {
             active_tags: vec!["订单".to_string()],
             global_mock_enabled: true,
             rules: Vec::new(),
+            local_responses: Vec::new(),
         }
     }
 
@@ -792,6 +844,7 @@ mod tests {
             enabled: true,
             tags: vec!["订单".to_string()],
             priority: 100,
+            local_response_id: None,
         }
     }
 

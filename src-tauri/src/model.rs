@@ -40,6 +40,25 @@ pub struct ProjectProfile {
     #[serde(default = "default_global_mock_enabled")]
     pub global_mock_enabled: bool,
     pub rules: Vec<ProxyRule>,
+    #[serde(default)]
+    pub local_responses: Vec<LocalMockResponse>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalMockResponse {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub delay_ms: u64,
+    #[serde(default = "default_response_status")]
+    pub status: u16,
+    #[serde(default)]
+    pub body: String,
+}
+
+fn default_response_status() -> u16 {
+    200
 }
 
 fn default_global_mock_enabled() -> bool {
@@ -95,6 +114,8 @@ pub struct ProxyRule {
     pub enabled: bool,
     pub tags: Vec<String>,
     pub priority: i32,
+    #[serde(default)]
+    pub local_response_id: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq)]
@@ -250,6 +271,22 @@ pub struct RuleInput {
     pub priority: i32,
     #[serde(default)]
     pub apifox_web_url: String,
+    #[serde(default)]
+    pub local_response_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalMockResponseInput {
+    pub id: Option<String>,
+    pub profile_id: String,
+    pub name: String,
+    #[serde(default)]
+    pub delay_ms: u64,
+    #[serde(default = "default_response_status")]
+    pub status: u16,
+    #[serde(default)]
+    pub body: String,
 }
 
 #[cfg(test)]
@@ -283,6 +320,7 @@ mod tests {
             active_tags: Vec::new(),
             global_mock_enabled: false,
             rules: Vec::new(),
+            local_responses: Vec::new(),
         };
         let mut serialized = serde_json::to_value(profile).expect("profile should serialize");
         serialized

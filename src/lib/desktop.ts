@@ -11,6 +11,7 @@ import type {
   ResolveOperationInput,
   RequestLog,
   RuleInput,
+  LocalMockResponseInput,
 } from "../types";
 
 export function isDesktopRuntime() {
@@ -77,6 +78,14 @@ export async function resolveApifoxOperation(input: ResolveOperationInput) {
 
 export async function saveRule(input: RuleInput) {
   return invokeDesktop("save_rule", { input });
+}
+
+export async function saveLocalResponse(input: LocalMockResponseInput) {
+  return invokeDesktop("save_local_response", { input });
+}
+
+export async function deleteLocalResponse(profileId: string, responseId: string) {
+  return invokeDesktop("delete_local_response", { profileId, responseId });
 }
 
 export async function deleteRule(profileId: string, ruleId: string) {

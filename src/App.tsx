@@ -10,6 +10,7 @@ import { ProjectSidebar } from "./components/ProjectSidebar";
 import { ProxyHeader } from "./components/ProxyHeader";
 import { RequestLogPanel } from "./components/RequestLogPanel";
 import { RuleTable } from "./components/RuleTable";
+import { LocalMockPanel } from "./components/LocalMockPanel";
 import * as desktop from "./lib/desktop";
 import type { ApifoxRequest, DesktopSnapshot, DiagnosticEntry, RequestLog, RuleInput } from "./types";
 import "./App.css";
@@ -227,11 +228,12 @@ function Workspace(props: WorkspaceProps) {
       <div className="workspace-grid">
         <ConnectionGuide certificate={props.snapshot.certificate} hasTraffic={props.snapshot.logs.length > 0} profile={profile} proxyStatus={props.snapshot.proxyStatus} />
         <div className="workspace-config-actions">
+          <LocalMockPanel profileId={profile.id} responses={profile.localResponses} onSave={(input) => props.apply(desktop.saveLocalResponse(input), "保存本地 Mock 响应")} onDelete={(id) => props.apply(desktop.deleteLocalResponse(profile.id, id), "删除本地 Mock 响应")} />
           <ApifoxSyncPanel profile={profile} onSync={(request) => props.apply(desktop.syncApifox(request), "同步 Apifox 接口")} onValidate={props.validateApifox} />
           <CertificatePanel certificate={props.snapshot.certificate} onGenerate={() => props.apply(desktop.generateCertificate(), "生成证书")} onOpen={() => props.execute(desktop.openCertificate(), "打开证书")} onRefresh={() => props.apply(desktop.refreshCertificate(), "刷新证书信任")} />
         </div>
       </div>
-      <RuleTable profile={profile} onDebugSingle={debugSingle} onDelete={(id) => props.apply(desktop.deleteRule(profile.id, id), "删除 Mock 接口")} onOpenUrl={(url) => props.execute(desktop.openExternalUrl(url), "打开 Apifox 接口")} onReset={() => props.apply(desktop.clearRules(profile.id), "重置 Mock 接口列表")} onResolve={desktop.resolveApifoxOperation} onSave={(input: RuleInput) => props.apply(desktop.saveRule(input), "保存 Mock 接口")} onToggle={(id, enabled) => props.apply(desktop.setRuleEnabled(profile.id, id, enabled), "切换接口 Mock")} onToggleGlobal={(enabled) => props.apply(desktop.setGlobalMockEnabled(profile.id, enabled), "切换全局 Mock")} />
+      <RuleTable profile={profile} localResponses={profile.localResponses} onDebugSingle={debugSingle} onDelete={(id) => props.apply(desktop.deleteRule(profile.id, id), "删除 Mock 接口")} onOpenUrl={(url) => props.execute(desktop.openExternalUrl(url), "打开 Apifox 接口")} onReset={() => props.apply(desktop.clearRules(profile.id), "重置 Mock 接口列表")} onResolve={desktop.resolveApifoxOperation} onSave={(input: RuleInput) => props.apply(desktop.saveRule(input), "保存 Mock 接口")} onToggle={(id, enabled) => props.apply(desktop.setRuleEnabled(profile.id, id, enabled), "切换接口 Mock")} onToggleGlobal={(enabled) => props.apply(desktop.setGlobalMockEnabled(profile.id, enabled), "切换全局 Mock")} />
       <RequestLogPanel logs={props.snapshot.logs} onClear={() => props.apply(desktop.clearLogs(), "清空请求记录")} />
     </>
   );

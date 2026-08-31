@@ -9,8 +9,8 @@ use crate::apifox::{
 };
 use crate::model::{
     ApifoxConnection, ApifoxMode, ApifoxPreview, ApifoxRequest, DesktopSnapshot, InterfacePreview,
-    MatchMode, OperationResolution, ProfileInput, ProjectProfile, ProxyRule, ResolveOperationInput,
-    ResolvedInterface, RuleInput, RuleSource,
+    LocalMockResponse, LocalMockResponseInput, MatchMode, OperationResolution, ProfileInput,
+    ProjectProfile, ProxyRule, ResolveOperationInput, ResolvedInterface, RuleInput, RuleSource,
 };
 use crate::proxy;
 use crate::state::AppState;
@@ -298,9 +298,87 @@ pub fn save_rule(input: RuleInput, state: State<'_, AppState>) -> Result<Desktop
         if rule.apifox_web_url.is_empty() {
             rule.apifox_web_url = existing.apifox_web_url.clone();
         }
+        if rule.local_response_id.is_some()
+            && !profile
+                .local_responses
+                .iter()
+                .any(|item| Some(&item.id) == rule.local_response_id.as_ref())
+        {
+            return Err("本地预设响应不存在".to_string());
+        }
         *existing = rule;
     } else {
+        if rule.local_response_id.is_some()
+            && !profile
+                .local_responses
+                .iter()
+                .any(|item| Some(&item.id) == rule.local_response_id.as_ref())
+        {
+            return Err("本地预设响应不存在".to_string());
+        }
         profile.rules.push(rule);
+    }
+    state.persist(&current)?;
+    Ok(current.clone())
+}
+
+#[tauri::command]
+pub fn save_local_response(
+    input: LocalMockResponseInput,
+    state: State<'_, AppState>,
+) -> Result<DesktopSnapshot, String> {
+    let name = input.name.trim();
+    if name.is_empty() {
+        return Err("响应名字不能为空".to_string());
+    }
+    if input.status == 0 || input.status > 599 {
+        return Err("HTTP 状态必须在 100-599 之间".to_string());
+    }
+    let response = LocalMockResponse {
+        id: input.id.unwrap_or_else(|| create_id("response")),
+        name: name.to_string(),
+        delay_ms: input.delay_ms.min(60000),
+        status: input.status,
+        body: input.body,
+    };
+    let mut current = lock_snapshot(&state)?;
+    let profile = current
+        .profiles
+        .iter_mut()
+        .find(|profile| profile.id == input.profile_id)
+        .ok_or_else(|| "profile was not found".to_string())?;
+    if let Some(existing) = profile
+        .local_responses
+        .iter_mut()
+        .find(|item| item.id == response.id)
+    {
+        *existing = response;
+    } else {
+        profile.local_responses.push(response);
+    }
+    state.persist(&current)?;
+    Ok(current.clone())
+}
+
+#[tauri::command]
+pub fn delete_local_response(
+    profile_id: String,
+    response_id: String,
+    state: State<'_, AppState>,
+) -> Result<DesktopSnapshot, String> {
+    let mut current = lock_snapshot(&state)?;
+    let profile = current
+        .profiles
+        .iter_mut()
+        .find(|profile| profile.id == profile_id)
+        .ok_or_else(|| "profile was not found".to_string())?;
+    profile
+        .local_responses
+        .retain(|item| item.id != response_id);
+    for rule in &mut profile.rules {
+        if rule.local_response_id.as_deref() == Some(response_id.as_str()) {
+            rule.local_response_id = None;
+        }
     }
     state.persist(&current)?;
     Ok(current.clone())
@@ -446,6 +524,7 @@ fn build_profile(input: ProfileInput) -> Result<ProjectProfile, String> {
         active_tags: Vec::new(),
         global_mock_enabled: false,
         rules: Vec::new(),
+        local_responses: Vec::new(),
     })
 }
 
@@ -508,8 +587,10 @@ fn build_custom_rule(input: &RuleInput) -> Result<ProxyRule, String> {
     if !path.starts_with('/') && input.match_mode != MatchMode::Regex {
         return Err("Mock interface URL must start with /".to_string());
     }
-    url::Url::parse(input.target.trim())
-        .map_err(|error| format!("Mock URL is invalid: {error}"))?;
+    if input.local_response_id.is_none() {
+        url::Url::parse(input.target.trim())
+            .map_err(|error| format!("Mock URL is invalid: {error}"))?;
+    }
     Ok(ProxyRule {
         id: input.id.clone().unwrap_or_else(|| create_id("rule")),
         source: RuleSource::Custom,
@@ -523,6 +604,7 @@ fn build_custom_rule(input: &RuleInput) -> Result<ProxyRule, String> {
         enabled: input.enabled,
         tags: unique_non_empty(input.tags.clone()),
         priority: input.priority,
+        local_response_id: input.local_response_id.clone(),
     })
 }
 
@@ -720,6 +802,7 @@ mod tests {
             enabled: true,
             tags: vec!["订单".to_string()],
             priority: 100,
+            local_response_id: None,
             apifox_web_url: "https://app.apifox.com/project/123/apis/api-456".to_string(),
         })
         .expect("mapped interface should build");
@@ -761,6 +844,7 @@ mod tests {
             enabled: true,
             tags: vec!["订单".to_string()],
             priority: 100,
+            local_response_id: None,
         });
 
         reset_profile_rules(&mut profile);

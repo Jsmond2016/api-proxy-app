@@ -219,6 +219,7 @@ pub fn build_rules(
             enabled: true,
             tags: operation.tags.clone(),
             priority: 100,
+            local_response_id: None,
         });
     }
     if rules.is_empty() {

@@ -369,6 +369,7 @@ fn migrate_legacy_profile(profile: LegacyProfile) -> ProjectProfile {
         active_tags: profile.apifox.selected_tags,
         global_mock_enabled: true,
         rules,
+        local_responses: Vec::new(),
     }
 }
 
@@ -391,6 +392,7 @@ fn migrate_legacy_rule(rule: LegacyRule) -> ProxyRule {
         enabled: rule.enabled,
         tags: vec![rule.tag],
         priority: 100,
+        local_response_id: None,
     }
 }
 
@@ -457,6 +459,7 @@ mod tests {
                 active_tags: vec!["tag".to_string()],
                 global_mock_enabled: true,
                 rules: Vec::new(),
+                local_responses: Vec::new(),
             });
             state.persist(&snapshot).expect("state should persist");
         }

@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { MouseEvent } from "react";
 import type { RefObject } from "react";
-import type { MatchMode, OperationResolution, ProjectProfile, ProxyRule, ResolveOperationInput, RuleInput } from "../types";
+import type { LocalMockResponse, MatchMode, OperationResolution, ProjectProfile, ProxyRule, ResolveOperationInput, RuleInput } from "../types";
 
 interface RuleTableProps {
   profile: ProjectProfile;
@@ -18,6 +18,7 @@ interface RuleTableProps {
   onToggle: (ruleId: string, enabled: boolean) => Promise<void>;
   onToggleGlobal: (enabled: boolean) => Promise<void>;
   onDebugSingle: (ruleId: string) => Promise<void>;
+  localResponses: LocalMockResponse[];
 }
 
 export function RuleTable(props: RuleTableProps) {
@@ -65,7 +66,7 @@ export function RuleTable(props: RuleTableProps) {
       <div className="rule-table-wrap">
         <Table<ProxyRule> columns={columns} dataSource={visible} locale={{ emptyText: <Empty description="尚无 Mock 接口。先同步 Apifox Tag，或手动添加接口。" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }} pagination={false} rowKey="id" rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys.map(String)) }} scroll={{ x: 1082 }} size="small" />
       </div>
-      <RuleDialog key={editing?.id || String(creating)} profile={props.profile} rule={editing} visible={creating || Boolean(editing)} onClose={() => { setCreating(false); setEditing(null); }} onResolve={props.onResolve} onSave={props.onSave} />
+      <RuleDialog key={editing?.id || String(creating)} localResponses={props.localResponses} profile={props.profile} rule={editing} visible={creating || Boolean(editing)} onClose={() => { setCreating(false); setEditing(null); }} onResolve={props.onResolve} onSave={props.onSave} />
     </section>
   );
 }
@@ -142,7 +143,7 @@ function RulePath(props: { rule: ProxyRule; onOpenUrl: (url: string) => Promise<
   return <a className="rule-path-link" href={props.rule.apifoxWebUrl} onClick={open} title="在 Apifox Web 打开接口"><code>{props.rule.path}</code></a>;
 }
 
-function RuleDialog(props: { visible: boolean; profile: ProjectProfile; rule: ProxyRule | null; onClose: () => void; onResolve: (input: ResolveOperationInput) => Promise<OperationResolution>; onSave: (input: RuleInput) => Promise<void> }) {
+function RuleDialog(props: { visible: boolean; profile: ProjectProfile; rule: ProxyRule | null; localResponses: LocalMockResponse[]; onClose: () => void; onResolve: (input: ResolveOperationInput) => Promise<OperationResolution>; onSave: (input: RuleInput) => Promise<void> }) {
   const { message } = AntApp.useApp();
   const [name, setName] = useState(props.rule?.name || "");
   const [method, setMethod] = useState(props.rule?.method || "");
@@ -152,9 +153,10 @@ function RuleDialog(props: { visible: boolean; profile: ProjectProfile; rule: Pr
   const [tags, setTags] = useState(props.rule?.tags.join(", ") || "");
   const [priority, setPriority] = useState<number | null>(props.rule?.priority ?? null);
   const [apifoxWebUrl, setApifoxWebUrl] = useState(props.rule?.apifoxWebUrl || "");
+  const [localResponseId, setLocalResponseId] = useState<string | null>(props.rule?.localResponseId || null);
   const [busy, setBusy] = useState(false);
   const [resolving, setResolving] = useState(false);
-  const saveDisabled = !name.trim() || !path.trim() || !target.trim() || !method || !matchMode;
+  const saveDisabled = !name.trim() || !path.trim() || (!target.trim() && !localResponseId) || !method || !matchMode;
 
   async function resolveUrl() {
     if (!path.trim()) return;
@@ -185,7 +187,7 @@ function RuleDialog(props: { visible: boolean; profile: ProjectProfile; rule: Pr
 
   async function submit() {
     if (!matchMode) return;
-    const input: RuleInput = { profileId: props.profile.id, name, method, path: normalizeRulePath(path), matchMode, target, enabled: true, tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean), priority: priority ?? 100, apifoxWebUrl };
+    const input: RuleInput = { profileId: props.profile.id, name, method, path: normalizeRulePath(path), matchMode, target, enabled: true, tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean), priority: priority ?? 100, apifoxWebUrl, localResponseId };
     if (props.rule) {
       input.id = props.rule.id;
       input.enabled = props.rule.enabled;
@@ -205,6 +207,7 @@ function RuleDialog(props: { visible: boolean; profile: ProjectProfile; rule: Pr
         <Form.Item extra="输入完整 URL 或接口路径，失焦后将从当前 Apifox 项目自动匹配" label="接口 URL" required><Input placeholder="https://api.example.com/api/orders/{id}" suffix={resolvingIndicator(resolving)} value={path} onBlur={resolveUrl} onChange={(event) => setPath(event.target.value)} /></Form.Item>
         <Form.Item label="接口名称" required><Input placeholder="请输入接口名称" value={name} onChange={(event) => setName(event.target.value)} /></Form.Item>
         <Form.Item label="Mock URL" required><Input placeholder="https://mock.example.com/api/orders/{id}" value={target} onChange={(event) => setTarget(event.target.value)} /></Form.Item>
+        <Form.Item label="使用预设响应体"><Switch checked={Boolean(localResponseId)} onChange={(checked) => { if (checked) { setLocalResponseId(props.localResponses[0]?.id || null); return; } setLocalResponseId(null); }} /><Select allowClear disabled={!localResponseId} onChange={setLocalResponseId} options={props.localResponses.map((item) => ({ label: item.name, value: item.id }))} placeholder="选择预设响应" style={{ marginLeft: 12, minWidth: 220 }} value={localResponseId || undefined} /></Form.Item>
         <div className="form-grid"><Form.Item label="请求方式" required><Select placeholder="请选择" value={method || undefined} onChange={setMethod} options={["GET", "POST", "PUT", "PATCH", "DELETE"].map((item) => ({ label: item, value: item }))} /></Form.Item><Form.Item label="匹配方式" required><Select placeholder="请选择" value={matchMode || undefined} onChange={setMatchMode} options={["exact", "template", "contains", "regex"].map((item) => ({ label: item, value: item }))} /></Form.Item></div>
         <div className="form-grid"><Form.Item label="Tags（逗号分隔）"><Input placeholder="选填" value={tags} onChange={(event) => setTags(event.target.value)} /></Form.Item><Form.Item label="优先级"><InputNumber min={0} placeholder="选填" value={priority} onChange={setPriority} /></Form.Item></div>
       </Form>

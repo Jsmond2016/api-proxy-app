@@ -25,6 +25,15 @@ export interface ProxyRule {
   enabled: boolean;
   tags: string[];
   priority: number;
+  localResponseId?: string | null;
+}
+
+export interface LocalMockResponse {
+  id: string;
+  name: string;
+  delayMs: number;
+  status: number;
+  body: string;
 }
 
 export interface ProjectProfile {
@@ -37,6 +46,7 @@ export interface ProjectProfile {
   syncedTags: string[];
   globalMockEnabled: boolean;
   rules: ProxyRule[];
+  localResponses: LocalMockResponse[];
 }
 
 export interface RequestLog {
@@ -149,4 +159,14 @@ export interface RuleInput {
   tags: string[];
   priority: number;
   apifoxWebUrl: string;
+  localResponseId?: string | null;
+}
+
+export interface LocalMockResponseInput {
+  id?: string;
+  profileId: string;
+  name: string;
+  delayMs: number;
+  status: number;
+  body: string;
 }

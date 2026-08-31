@@ -4098,7 +4098,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-app"
-version = "0.1.39"
+version = "0.1.40"
 dependencies = [
  "hudsucker",
  "hyper-rustls",

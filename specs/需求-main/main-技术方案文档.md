@@ -486,6 +486,7 @@ Content-Type: application/json
 | 2026-08-28 | 完成 R52 HTTPS 隧道常驻 MITM | 通过全量测试与构建 | CONNECT/TLS 拦截改为按活动项目常驻，Mock 开关仅在请求层门控；关闭时保持解密后透传，开启后可处理复用连接中的后续请求；`cargo test` 27 passed、`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |
 | 2026-08-31 | R53 Tag/Loading/接口信息复制修复 | 通过构建验证 | `pnpm build`、`pnpm run check:source`、`cargo check`、`git diff --check` 通过；长 Tag 视觉和剪贴板内容仍需桌面人工验收 |
 | 2026-08-31 | 用户通过 `ac` 确认并完成 R53 | R53 | GPT-5 Codex | Tag Select 固定 420px 宽度且使用固定标签数量；验证、拉取、同步 loading 独立；接口信息复制包含源 URL、方法路径和 Apifox 地址 |
+| 2026-08-31 | 版本升级 | 已完成 | 应用版本由 0.1.39 升至 0.1.40 |
 | 2026-08-27 | 0.1.9 用户安装验收 | 通过 | 用户确认验证通过并要求提交当前实现 |
 | 2026-08-27 | 微信开发者工具真实项目人工验收 | 待用户执行 | 需要用户的真实源域名、Apifox 项目、Token 和微信开发者工具环境；按 `main-使用与验收文档.md` 验收 |
 # R20 Ant Design UI 迁移方案

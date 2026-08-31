@@ -685,7 +685,7 @@ h2 {
 }
 
 .original-url { display: inline-flex; align-items: center; gap: 4px; }
-.test-modal-footer { display: flex; justify-content: flex-end; }
+.test-modal-footer { display: flex; justify-content: flex-end; gap: 8px; }
 
 .test-result pre {
   max-height: 320px;

@@ -406,6 +406,7 @@ Content-Type: application/json
 | 2026-08-28 | 提议 R27：在 Mock 接口标题旁增加不生效排查 Tooltip | 用户发现 Apifox 接口 Method 定义错误会导致请求透传，希望将全局开关、接口开关、域名/路径、Method 和 HTTPS 证书等常见问题集中提示；等待确认 | R27 | GPT-5 Codex |
 | 2026-08-28 | 用户通过 `ac` 确认 R27，并补充 R28：测试请求全局门控与结果弹框增强 | R27、R28 | GPT-5 Codex | 测试操作复用全局 Mock 状态校验；响应内容格式化并增加 Mock 跳转/关闭操作 |
 | 2026-08-28 | 完成 R27-R28 | R27、R28 | GPT-5 Codex | Mock 接口标题增加排查 Tooltip；测试按钮受全局 Mock 开关约束；测试弹框增加格式化响应、请求信息、错误信息及 Mock 跳转/关闭操作 |
+| 2026-08-31 | 补充 R28 测试弹框重试 | R28 | GPT-5 Codex | 在测试结果 Modal footer 中复用现有测试请求函数增加“重试”按钮；点击后保持弹框打开，清空旧结果并重新请求当前 Mock 目标，加载期间按钮显示 loading 并避免重复提交 |
 | 2026-08-28 | 提议 R29：移除左侧菜单并以 Tabs 管理多个联调项目 | 用户要求参考项目的单主面板交互；将项目导航、创建、编辑、删除迁移到主面板顶部 Tabs，保留当前 Profile 切换时的代理监听生命周期和规则数据联动；等待确认 | R29 | GPT-5 Codex |
 | 2026-08-28 | 用户通过 `ac` 确认并完成 R29 | R29 | GPT-5 Codex | `ProjectSidebar` 改为顶部 Tabs 项目栏，单列主面板承载所有工作区；新增、编辑、删除入口和项目切换命令保持不变 |
 | 2026-08-28 | 提议 R30：测试弹框“去 Mock 接口”改跳 Apifox 配置页 | 当前按钮误用 `rule.target`，会打开 Mock 请求地址；改用 `rule.apifoxWebUrl`，无可靠链接时禁用按钮并提示 | R30 | GPT-5 Codex |
@@ -475,6 +476,7 @@ Content-Type: application/json
 | 2026-08-28 | 0.1.33 HTTPS 隧道常驻 MITM 修复包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；`hdiutil verify` 通过，SHA-256 `889e66d8bdd93a9d1554c976f2e6c44f2f565f25971940d5879d2370b5253ab1` |
 | 2026-08-29 | 0.1.34 移除自定义响应体并优化体积 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；启用 Rust release 体积优化后 DMG 为 5,459,586 bytes，`hdiutil verify` 通过，SHA-256 `3bb5b923c0e464c5184f02df933af7d41ec5800c4d3c0dc46f29359a0e380f5d` |
 | 2026-08-29 | 0.1.35 发布包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；DMG 为 5,459,680 bytes，`hdiutil verify` 通过，SHA-256 `a3d837b645e8e4e87dec582ff206122affcd3829a1e5f929c0da9596ccf18c65` |
+| 2026-08-31 | 0.1.36 重试 Mock 测试交付包 | 通过 | `pnpm run package:mac` 成功生成安装型 DMG；DMG 为 5,460,077 bytes，`hdiutil verify` 通过，SHA-256 `b01621098dd67f0931ac0045fb41c581a8462c0bffa97b37097d6028a0261071`；未配置 Apple 公证凭据，保持本地签名未公证 |
 | 2026-08-28 | 完成 R46 测试响应搜索与弹框操作调整 | 通过构建验证 | 测试弹框移除重复“关闭”按钮，“去 Mock 接口”固定右侧；响应内容增加搜索框、`Ctrl/Cmd+F` 聚焦、匹配高亮、首个匹配自动滚动和 420px 内部滚动；`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |
 | 2026-08-28 | 完成 R47 响应搜索多匹配导航 | 通过构建验证 | 增加匹配计数、当前命中高亮、上/下循环导航及 Enter/Shift+Enter 快捷键；关键词变化重置到首个匹配；`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |
 | 2026-08-28 | 用户通过 `ac` 确认并完成 R48 无项目创建入口修复 | 通过构建验证 | 空配置时 `Workspace` 提前返回导致项目 Tabs/新建按钮不渲染；调整为空状态仍渲染项目导航，复用现有创建弹框；`pnpm build`、`pnpm run check:source`、`git diff --check` 通过 |

@@ -509,16 +509,16 @@ h2 {
 }
 
 .sync-submit.ant-btn-primary {
-  border-color: #2a6a46;
-  background: #2a6a46;
-  color: #ffffff;
+  border-color: #16835f !important;
+  background: #16835f !important;
+  color: #ffffff !important;
 }
 
 .sync-submit.ant-btn-primary:hover,
 .sync-submit.ant-btn-primary:focus {
-  border-color: #1f5638;
-  background: #1f5638;
-  color: #ffffff;
+  border-color: #126b4e !important;
+  background: #126b4e !important;
+  color: #ffffff !important;
 }
 
 .rule-name-line {
@@ -881,9 +881,9 @@ h2 {
   height: 30px;
   gap: 5px;
   padding: 0 9px;
-  border: 1px solid #2a6a46;
+  border: 1px solid #16835f;
   border-radius: 4px;
-  background: #2a6a46;
+  background: #16835f;
   color: #ffffff;
   font-size: 10px;
   font-weight: 700;
@@ -891,7 +891,6 @@ h2 {
 
 .sync-submit:disabled {
   cursor: progress;
-  opacity: .65;
 }
 
 .rules-section,

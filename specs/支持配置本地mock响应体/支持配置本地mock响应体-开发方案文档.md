@@ -66,3 +66,4 @@
 | 2026-08-31 | `cargo test` | 部分通过 | 25/27 通过；2 个网络 E2E 因沙箱禁止绑定回环端口失败 |
 | 2026-08-31 | 版本升级与打包准备 | 已完成 | 应用版本由 0.1.36 升至 0.1.37 |
 | 2026-08-31 | macOS `.app/.dmg` 打包 | 通过 | 生成 `src-tauri/target/release/bundle/macos/Apifox Proxy.app` 与 `Apifox Proxy_0.1.37_aarch64.dmg`；DMG 5.2M，`hdiutil verify` 通过，SHA-256 `2621c25319a58e01cf1ffcab3675cc359c58ebc43fa6aaf6fda1041d67dfe22d` |
+| 2026-08-31 | 版本升级 | 已完成 | 应用版本由 0.1.37 升至 0.1.38 |

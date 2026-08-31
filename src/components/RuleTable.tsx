@@ -46,9 +46,9 @@ export function RuleTable(props: RuleTableProps) {
   const columns = useMemo<TableColumnsType<ProxyRule>>(() => [
     { title: "Mock 开关", dataIndex: "enabled", width: 96, render: (_, rule) => <Switch aria-label={`切换${rule.name}`} checked={rule.enabled} onChange={(enabled) => props.onToggle(rule.id, enabled)} size="small" /> },
     { title: "接口信息", dataIndex: "name", width: 380, render: (_, rule) => <div className="rule-info-cell"><strong>{rule.name}</strong><span className="request-cell"><span className={`method-badge method-${rule.method.toLowerCase()}`}>{rule.method}</span><RulePath rule={rule} onOpenUrl={props.onOpenUrl} /></span></div> },
-    { title: "Mock 目标", dataIndex: "target", width: 320, render: (target: string) => <div className="target-cell"><span title={target}>{target}</span></div> },
-    { title: "操作", key: "actions", fixed: "right", width: 132, render: (_, rule) => <RuleActions globalMockEnabled={props.profile.globalMockEnabled} onDebugSingle={props.onDebugSingle} onDelete={props.onDelete} onEdit={setEditing} onOpenUrl={props.onOpenUrl} rule={rule} /> },
-  ], [props.onDelete, props.onDebugSingle, props.onOpenUrl, props.onToggle]);
+    { title: "Mock 目标", dataIndex: "target", width: 320, render: (_, rule) => <div className="target-cell"><span title={displayMockTarget(rule, props.localResponses)}>{displayMockTarget(rule, props.localResponses)}</span></div> },
+    { title: "操作", key: "actions", fixed: "right", width: 132, render: (_, rule) => <RuleActions globalMockEnabled={props.profile.globalMockEnabled} localResponses={props.localResponses} onDebugSingle={props.onDebugSingle} onDelete={props.onDelete} onEdit={setEditing} onOpenUrl={props.onOpenUrl} rule={rule} /> },
+  ], [props.localResponses, props.onDelete, props.onDebugSingle, props.onOpenUrl, props.onToggle]);
 
   return (
     <section className="rules-section">
@@ -71,7 +71,7 @@ export function RuleTable(props: RuleTableProps) {
   );
 }
 
-function RuleActions(props: { rule: ProxyRule; globalMockEnabled: boolean; onDelete: (ruleId: string) => Promise<void>; onEdit: (rule: ProxyRule) => void; onDebugSingle: (ruleId: string) => Promise<void>; onOpenUrl: (url: string) => Promise<void> }) {
+function RuleActions(props: { rule: ProxyRule; globalMockEnabled: boolean; localResponses: LocalMockResponse[]; onDelete: (ruleId: string) => Promise<void>; onEdit: (rule: ProxyRule) => void; onDebugSingle: (ruleId: string) => Promise<void>; onOpenUrl: (url: string) => Promise<void> }) {
   const [testing, setTesting] = useState(false);
   const [debugging, setDebugging] = useState(false);
   const [result, setResult] = useState<TestResult | null>(null);
@@ -83,9 +83,19 @@ function RuleActions(props: { rule: ProxyRule; globalMockEnabled: boolean; onDel
   async function test() {
     if (!props.globalMockEnabled) { void message.warning("全局 Mock 已关闭，请先开启后再测试接口"); return; }
     if (!props.rule.enabled) { void message.warning("请先打开当前接口的 Mock 开关"); return; }
-    if (!props.rule.target) { void message.warning("当前接口未配置 Mock 目标"); return; }
+    const localResponse = findLocalResponse(props.rule, props.localResponses);
+    if (!localResponse && !props.rule.target) { void message.warning("当前接口未配置 Mock 目标"); return; }
     setTesting(true); setResult(null); setResponseSearch(""); setResponseMatchIndex(0);
-    try { const response = await fetch(props.rule.target, { method: props.rule.method }); const body = await response.text(); setResult({ status: response.status, statusText: response.statusText, body: formatResponseBody(body), error: "" }); } catch (reason) { setResult({ status: 0, statusText: "请求失败", body: "", error: errorMessage(reason) }); } finally { setTesting(false); }
+    try {
+      if (localResponse) {
+        await waitForDelay(localResponse.delayMs);
+        setResult({ status: localResponse.status, statusText: statusText(localResponse.status), body: formatResponseBody(localResponse.body), error: "" });
+      } else {
+        const response = await fetch(props.rule.target, { method: props.rule.method });
+        const body = await response.text();
+        setResult({ status: response.status, statusText: response.statusText, body: formatResponseBody(body), error: "" });
+      }
+    } catch (reason) { setResult({ status: 0, statusText: "请求失败", body: "", error: errorMessage(reason) }); } finally { setTesting(false); }
   }
   useEffect(() => {
     if (!result) return;
@@ -221,5 +231,9 @@ function resolvingIndicator(resolving: boolean) { if (resolving) return <Spin si
 function normalizeRulePath(value: string) { try { return new URL(value).pathname; } catch { const path = value.split(/[?#]/)[0].trim(); if (path.startsWith("/")) return path; return `/${path}`; } }
 function errorMessage(reason: unknown) { if (reason instanceof Error) return reason.message; return String(reason); }
 function formatResponseBody(body: string) { try { return JSON.stringify(JSON.parse(body), null, 2); } catch { return body; } }
+function findLocalResponse(rule: ProxyRule, responses: LocalMockResponse[]) { if (!rule.localResponseId) return null; return responses.find((response) => response.id === rule.localResponseId) || null; }
+function displayMockTarget(rule: ProxyRule, responses: LocalMockResponse[]) { const response = findLocalResponse(rule, responses); if (response) return `预设-${response.name}`; return rule.target; }
+function statusText(status: number) { return `HTTP ${status}`; }
+async function waitForDelay(delay: number) { if (delay <= 0) return; await new Promise<void>((resolve) => { window.setTimeout(resolve, delay); }); }
 async function copyOriginalUrl(rule: ProxyRule) { try { await navigator.clipboard.writeText(`${rule.method} ${rule.path}`); } catch { return; } }
 async function copySimulationPrompt(rules: ProxyRule[], message: ReturnType<typeof AntApp.useApp>["message"]) { const lines = rules.map((rule) => `- 原始接口：${rule.method} ${rule.path}\n  Mock 接口：${rule.target}`).join("\n"); const prompt = `请帮我将当前项目中以下接口的请求 URL 替换为对应的 Mock 接口 URL。\n\n${lines}\n\n限制：只替换 URL 请求地址，不修改请求方法、请求参数、请求体、响应处理、业务逻辑和其他接口代码。\n\n完成后，请在每个替换位置增加注释：TODO: 联调接口待删除。\n禁止提交这些 Mock 接口代码，保留修改在本地工作区，等待人工确认后再提交。`; try { await navigator.clipboard.writeText(prompt); message.success("真机模拟提示词已复制到剪贴板"); } catch { message.error("提示词复制失败，请检查剪贴板权限"); } }

@@ -55,6 +55,7 @@
 | 2026-08-31 | 创建开发方案文档并经用户确认 | R1-R3 | GPT-5 Codex | 开始实施本地响应预设、规则绑定和代理直接响应 |
 | 2026-08-31 | 完成本地响应预设、规则引用和代理直接响应 | R1-R3 | GPT-5 Codex | 新增 Tauri CRUD、React 双层弹框、规则开关/下拉和 hudsucker 本地 Response；兼容旧配置 |
 | 2026-08-31 | 修复编辑 ID 丢失并增加复制按钮 | R1 | GPT-5 Codex | 编辑提交强制沿用原 ID；复制清空 ID、名称追加 `-copy` 后复用新增保存流程 |
+| 2026-08-31 | 修复本地预设目标展示和测试结果 | R2-R3 | GPT-5 Codex | 规则表显示 `预设-{响应名}`；测试按钮直接读取预设状态码、延时和响应体 |
 
 ## 验证结果
 
@@ -67,3 +68,4 @@
 | 2026-08-31 | 版本升级与打包准备 | 已完成 | 应用版本由 0.1.36 升至 0.1.37 |
 | 2026-08-31 | macOS `.app/.dmg` 打包 | 通过 | 生成 `src-tauri/target/release/bundle/macos/Apifox Proxy.app` 与 `Apifox Proxy_0.1.37_aarch64.dmg`；DMG 5.2M，`hdiutil verify` 通过，SHA-256 `2621c25319a58e01cf1ffcab3675cc359c58ebc43fa6aaf6fda1041d67dfe22d` |
 | 2026-08-31 | 版本升级 | 已完成 | 应用版本由 0.1.37 升至 0.1.38 |
+| 2026-08-31 | 预设目标展示/测试回归 | 通过 | `pnpm build`、`pnpm run check:source`、`cargo check`、`git diff --check` 通过 |

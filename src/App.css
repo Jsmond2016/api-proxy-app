@@ -503,7 +503,46 @@ h2 {
 }
 
 .tag-dropdown {
-  min-width: 210px;
+  flex: 0 0 420px;
+  width: 420px;
+  min-width: 420px;
+}
+
+.sync-submit.ant-btn-primary {
+  border-color: #2a6a46;
+  background: #2a6a46;
+  color: #ffffff;
+}
+
+.sync-submit.ant-btn-primary:hover,
+.sync-submit.ant-btn-primary:focus {
+  border-color: #1f5638;
+  background: #1f5638;
+  color: #ffffff;
+}
+
+.rule-name-line {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 3px;
+}
+
+.rule-name-line strong {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.rule-copy-action {
+  flex: 0 0 24px;
+}
+
+@media (max-width: 720px) {
+  .tag-dropdown {
+    flex-basis: 100%;
+    width: 100%;
+    min-width: 0;
+  }
 }
 
 .interface-preview {

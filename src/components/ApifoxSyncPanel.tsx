@@ -18,7 +18,9 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [validated, setValidated] = useState(false);
   const [preview, setPreview] = useState<ApifoxPreview | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [validateBusy, setValidateBusy] = useState(false);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -62,7 +64,7 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
   }
 
   async function validateConnection() {
-    setBusy(true);
+    setValidateBusy(true);
     try {
       const discoveryRequest = request();
       discoveryRequest.selectedTags = [];
@@ -75,7 +77,7 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
       setValidated(true);
       setPreview(null);
     } finally {
-      setBusy(false);
+      setValidateBusy(false);
     }
   }
 
@@ -85,22 +87,22 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
   }
 
   async function confirmTags() {
-    setBusy(true);
+    setConfirmBusy(true);
     try {
       setPreview(await props.onValidate(request()));
     } finally {
-      setBusy(false);
+      setConfirmBusy(false);
     }
   }
 
   async function applySync() {
     if (!preview) return;
-    setBusy(true);
+    setSyncBusy(true);
     try {
       await props.onSync(request());
       setPreview(null);
     } finally {
-      setBusy(false);
+      setSyncBusy(false);
     }
   }
 
@@ -117,10 +119,10 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
             <Form.Item label={<span><Link2 size={13} />Mock 前缀</span>}><Input placeholder="留空则按项目 ID 自动生成" value={mockPrefix} onChange={(event) => { setMockPrefix(event.target.value); invalidate(); }} /></Form.Item>
             <Form.Item label={<span><KeyRound size={13} />Access Token</span>}><Input.Password placeholder="可选" value={accessToken} onChange={(event) => { setAccessToken(event.target.value); invalidate(); }} /></Form.Item>
             <Form.Item label={<span><KeyRound size={13} />Mock Token</span>}><Input.Password placeholder="可选，用于 Apifox Mock 鉴权" value={mockToken} onChange={(event) => { setMockToken(event.target.value); invalidate(); }} /></Form.Item>
-            <div className="apifox-form-actions"><Button className="outline-button" loading={busy} onClick={validateConnection} type="primary">验证连接</Button></div>
+            <div className="apifox-form-actions"><Button className="outline-button" loading={validateBusy} onClick={validateConnection} type="primary">验证连接</Button></div>
           </Form>
-          <ConnectionResult availableTags={availableTags} busy={busy} selectedTags={selectedTags} validated={validated} onConfirm={confirmTags} onTags={changeTags} />
-          <InterfacePreviewPanel busy={busy} preview={preview} onApply={applySync} />
+          <ConnectionResult availableTags={availableTags} busy={confirmBusy || syncBusy} confirmBusy={confirmBusy} selectedTags={selectedTags} validated={validated} onConfirm={confirmTags} onTags={changeTags} />
+          <InterfacePreviewPanel busy={syncBusy} preview={preview} onApply={applySync} />
         </section>
       </Modal>
     </>
@@ -130,6 +132,7 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
 interface ConnectionResultProps {
   validated: boolean;
   busy: boolean;
+  confirmBusy: boolean;
   availableTags: string[];
   selectedTags: string[];
   onTags: (tags: string[]) => void;
@@ -144,14 +147,14 @@ function ConnectionResult(props: ConnectionResultProps) {
     <div className="tag-sync-row">
       <Alert className="validation-ok" message={`连接验证成功，共发现 ${props.availableTags.length} 个可选 Tag`} showIcon type="success" />
       <TagMultiSelect options={props.availableTags} value={props.selectedTags} onChange={props.onTags} />
-      <Button className="command-button" disabled={disabled} loading={props.busy} onClick={props.onConfirm} type="primary">确认 Tag 并拉取接口</Button>
+      <Button className="command-button" disabled={disabled} loading={props.confirmBusy} onClick={props.onConfirm} type="primary">确认 Tag 并拉取接口</Button>
     </div>
   );
 }
 
 function TagMultiSelect(props: { options: string[]; value: string[]; onChange: (tags: string[]) => void }) {
   if (props.options.length === 0) return <div className="tag-empty">OpenAPI 未声明 Tag，将同步全部接口</div>;
-  return <Select allowClear className="tag-dropdown" maxTagCount="responsive" mode="multiple" onChange={props.onChange} options={props.options.map((tag) => ({ label: tag, value: tag }))} placeholder="请选择 Tag" showSearch value={props.value} />;
+  return <Select allowClear className="tag-dropdown" maxTagCount={2} maxTagTextLength={20} mode="multiple" onChange={props.onChange} options={props.options.map((tag) => ({ label: tag, value: tag }))} placeholder="请选择 Tag" showSearch value={props.value} />;
 }
 
 function InterfacePreviewPanel(props: { preview: ApifoxPreview | null; busy: boolean; onApply: () => Promise<void> }) {

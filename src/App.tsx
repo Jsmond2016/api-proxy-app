@@ -174,7 +174,7 @@ function App() {
           apply={apply}
           execute={execute}
           appVersion={appVersion}
-          projectNavigation={{ activeProfileId: snapshot.activeProfileId, disabled: snapshot.proxyStatus === "starting", profiles: snapshot.profiles, onCreate: (input) => apply(desktop.createProfile(input), "创建项目"), onDelete: (id) => apply(desktop.deleteProfile(id), "删除项目"), onSelect: (id) => apply(desktop.setActiveProfile(id), "切换项目"), onUpdate: (input) => apply(desktop.updateProfile(input), "更新项目") }}
+          projectNavigation={{ activeProfileId: snapshot.activeProfileId, disabled: snapshot.proxyStatus === "starting", profiles: snapshot.profiles, onCreate: (input) => apply(desktop.createProfile(input), "创建项目"), onDelete: (id) => apply(desktop.deleteProfile(id), "删除项目"), onSelect: (id) => apply(desktop.setActiveProfile(id), "切换项目", false), onUpdate: (input) => apply(desktop.updateProfile(input), "更新项目") }}
           validateApifox={validateApifox}
         />
         <DiagnosticPanel entries={diagnostics} onClear={() => setDiagnostics([])} snapshot={snapshot} />

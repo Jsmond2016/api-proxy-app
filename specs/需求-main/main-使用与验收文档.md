@@ -20,6 +20,8 @@ Token 填写在项目连接表单中，并随 Profile 写入应用数据 JSON。
 
 域名匹配先于规则匹配。不同域名上的相同路径不会被误转发。
 
+已有 Tab 时再新建 Tab，新 Tab 的 Apifox 弹框会预填首个 Tab 的项目 ID、Mock 前缀、Access Token 和 Mock Token。Tag 不会预填，仍需在新 Tab 验证连接后独立选择；Mock 接口、全局开关和本地响应也不会从首个 Tab 复制。
+
 ## 3. 连接 Apifox 并同步 Tag
 
 ### 在线项目
@@ -81,6 +83,7 @@ Mock 接口列表固定高度并在内部滚动。请求路径与 Mock 目标支
 
 - [ ] 首次启动不出现 `wx-retail`、`wx-member` 或演示日志。
 - [ ] 项目创建、编辑、切换、删除和重启恢复正常。
+- [ ] 新建第二个 Tab 后，Apifox 弹框预填首个 Tab 的项目 ID、Mock 前缀和 Token，但不预填 Tag。
 - [ ] 在线 Apifox 验证能发现真实 Tag。
 - [ ] Mock Token 在同步和重启后保留；同步生成的 Apifox 规则目标包含 `apifoxToken`，请求日志不显示 Token。
 - [ ] 同步前 diff 数量符合预期，自定义规则不会被删除。

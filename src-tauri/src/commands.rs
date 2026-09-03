@@ -27,12 +27,13 @@ pub async fn create_profile(
     input: ProfileInput,
     state: State<'_, AppState>,
 ) -> Result<DesktopSnapshot, String> {
-    let profile = build_profile(input)?;
+    let mut profile = build_profile(input)?;
     {
         let mut current = lock_snapshot(&state)?;
         if current.profiles.iter().any(|item| item.id == profile.id) {
             return Err("profile ID already exists".to_string());
         }
+        inherit_apifox_from_first_profile(&mut profile, &current.profiles);
         current.active_profile_id = Some(profile.id.clone());
         current.profiles.push(profile);
         state.persist(&current)?;
@@ -546,6 +547,15 @@ fn build_profile(input: ProfileInput) -> Result<ProjectProfile, String> {
     })
 }
 
+fn inherit_apifox_from_first_profile(
+    profile: &mut ProjectProfile,
+    existing_profiles: &[ProjectProfile],
+) {
+    if let Some(first) = existing_profiles.first() {
+        profile.apifox = first.apifox.clone();
+    }
+}
+
 fn reset_profile_rules(profile: &mut ProjectProfile) {
     profile.rules.clear();
     profile.synced_tags.clear();
@@ -837,8 +847,8 @@ fn create_id(prefix: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_custom_rule, build_profile, move_rules_between_profiles, normalize_host,
-        reset_profile_rules, resolve_token,
+        build_custom_rule, build_profile, inherit_apifox_from_first_profile,
+        move_rules_between_profiles, normalize_host, reset_profile_rules, resolve_token,
     };
     use crate::model::{
         DesktopSnapshot, LocalMockResponse, MatchMode, ProfileInput, ProjectProfile, ProxyRule,
@@ -869,6 +879,27 @@ mod tests {
         .expect("profile should build");
 
         assert!(!profile.global_mock_enabled);
+    }
+
+    #[test]
+    fn new_profile_inherits_first_profile_apifox_connection_without_tags() {
+        let mut first = test_profile("first");
+        first.apifox.project_id = "123456".to_string();
+        first.apifox.mock_prefix = "https://mock.example.test".to_string();
+        first.apifox.access_token = "access-token".to_string();
+        first.apifox.mock_token = "mock-token".to_string();
+        first.synced_tags = vec!["订单".to_string()];
+        first.active_tags = vec!["订单".to_string()];
+        let mut created = test_profile("created");
+
+        inherit_apifox_from_first_profile(&mut created, &[first]);
+
+        assert_eq!(created.apifox.project_id, "123456");
+        assert_eq!(created.apifox.mock_prefix, "https://mock.example.test");
+        assert_eq!(created.apifox.access_token, "access-token");
+        assert_eq!(created.apifox.mock_token, "mock-token");
+        assert!(created.synced_tags.is_empty());
+        assert!(created.active_tags.is_empty());
     }
 
     #[test]

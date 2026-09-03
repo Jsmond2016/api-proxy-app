@@ -12,9 +12,9 @@ interface RuleTableProps {
   profile: ProjectProfile;
   profiles: ProjectProfile[];
   onDelete: (ruleId: string) => Promise<void>;
+  onDeleteMany: (ruleIds: string[]) => Promise<void>;
   onMove: (ruleIds: string[], targetProfileId: string) => Promise<void>;
   onOpenUrl: (url: string) => Promise<void>;
-  onReset: () => Promise<void>;
   onResolve: (input: ResolveOperationInput) => Promise<OperationResolution>;
   onSave: (input: RuleInput) => Promise<void>;
   onToggle: (ruleId: string, enabled: boolean) => Promise<void>;
@@ -32,6 +32,7 @@ export function RuleTable(props: RuleTableProps) {
   const [movingRuleIds, setMovingRuleIds] = useState<string[]>([]);
   const [targetProfileId, setTargetProfileId] = useState<string>();
   const [moving, setMoving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const { message } = AntApp.useApp();
   const targetProfiles = props.profiles.filter((profile) => profile.id !== props.profile.id);
   let batchMoveHint: string | undefined;
@@ -77,6 +78,16 @@ export function RuleTable(props: RuleTableProps) {
     }
   }
 
+  async function confirmBatchDelete() {
+    setDeleting(true);
+    try {
+      await props.onDeleteMany(selectedRowKeys);
+      setSelectedRowKeys([]);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const columns = useMemo<TableColumnsType<ProxyRule>>(() => [
     { title: "Mock 开关", dataIndex: "enabled", width: 96, render: (_, rule) => <Switch aria-label={`切换${rule.name}`} checked={rule.enabled} onChange={(enabled) => props.onToggle(rule.id, enabled)} size="small" /> },
     { title: "接口信息", dataIndex: "name", width: 380, render: (_, rule) => <div className="rule-info-cell"><div className="rule-name-line"><strong>{rule.name}</strong><Tooltip title="复制接口信息"><Button aria-label="复制接口信息" className="row-action rule-copy-action" icon={<Copy size={14} />} onClick={() => { void copyRuleInfo(rule); }} type="text" /></Tooltip></div><span className="request-cell"><span className={`method-badge method-${rule.method.toLowerCase()}`}>{rule.method}</span><RulePath rule={rule} onOpenUrl={props.onOpenUrl} /></span></div> },
@@ -93,8 +104,8 @@ export function RuleTable(props: RuleTableProps) {
           <Tooltip title={batchMoveHint}><span><Button disabled={targetProfiles.length === 0 || selectedRowKeys.length === 0} icon={<MoveRight size={15} />} onClick={() => startMove(selectedRowKeys)}>批量移动</Button></span></Tooltip>
           <Button disabled={selectedRowKeys.length === 0} icon={<WandSparkles size={15} />} onClick={() => { void copySimulationPrompt(props.profile.rules.filter((rule) => selectedRowKeys.includes(rule.id)), message); }}>真机模拟</Button>
           <Button className="command-button" icon={<Plus size={16} />} onClick={() => setCreating(true)} type="primary">添加接口</Button>
-          <Popconfirm cancelText="取消" description="将清空全部 Mock 接口及已同步 Tag，项目连接、Token 和全局开关保持不变。" disabled={props.profile.rules.length === 0} okButtonProps={{ danger: true }} okText="确认重置" onConfirm={async () => { await props.onReset(); setKeyword(""); }} title="重置 Mock 接口列表？">
-          <Button className="danger-button" danger disabled={props.profile.rules.length === 0} icon={<RotateCcw size={16} />}>重置接口</Button>
+          <Popconfirm cancelText="取消" description={`将删除已勾选的 ${selectedRowKeys.length} 个 Mock 接口，此操作不可恢复。`} disabled={selectedRowKeys.length === 0 || deleting} okButtonProps={{ danger: true }} okText="确认删除" onConfirm={() => { void confirmBatchDelete(); }} title="确认批量删除 Mock 接口？">
+          <Button className="danger-button" danger disabled={selectedRowKeys.length === 0 || deleting} icon={<Trash2 size={16} />} loading={deleting}>批量删除</Button>
           </Popconfirm>
         </div>
       </div>

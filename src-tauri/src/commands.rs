@@ -409,6 +409,31 @@ pub fn delete_rule(
 }
 
 #[tauri::command]
+pub fn delete_rules(
+    profile_id: String,
+    rule_ids: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<DesktopSnapshot, String> {
+    let requested_ids = rule_ids
+        .iter()
+        .map(|id| id.trim())
+        .filter(|id| !id.is_empty())
+        .collect::<BTreeSet<_>>();
+    if requested_ids.is_empty() {
+        return Err("请选择需要删除的 Mock 接口".to_string());
+    }
+    let mut current = lock_snapshot(&state)?;
+    let profile = current
+        .profiles
+        .iter_mut()
+        .find(|profile| profile.id == profile_id)
+        .ok_or_else(|| "profile was not found".to_string())?;
+    delete_rules_from_profile(profile, &requested_ids)?;
+    state.persist(&current)?;
+    Ok(current.clone())
+}
+
+#[tauri::command]
 pub fn move_rules(
     source_profile_id: String,
     target_profile_id: String,
@@ -562,6 +587,24 @@ fn reset_profile_rules(profile: &mut ProjectProfile) {
     profile.rules.clear();
     profile.synced_tags.clear();
     profile.active_tags.clear();
+}
+
+fn delete_rules_from_profile(
+    profile: &mut ProjectProfile,
+    requested_ids: &BTreeSet<&str>,
+) -> Result<usize, String> {
+    let existing_ids = profile
+        .rules
+        .iter()
+        .map(|rule| rule.id.as_str())
+        .collect::<BTreeSet<_>>();
+    if requested_ids.iter().any(|id| !existing_ids.contains(id)) {
+        return Err("部分 Mock 接口不存在".to_string());
+    }
+    profile
+        .rules
+        .retain(|rule| !requested_ids.contains(rule.id.as_str()));
+    Ok(requested_ids.len())
 }
 
 fn scope_apifox_rules_to_profile(rules: &mut [ProxyRule], profile_id: &str) {
@@ -865,10 +908,12 @@ fn create_id(prefix: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::{
-        build_custom_rule, build_profile, inherit_apifox_from_first_profile,
-        move_rules_between_profiles, normalize_host, reset_profile_rules, resolve_token,
-        scope_apifox_rules_to_profile,
+        build_custom_rule, build_profile, delete_rules_from_profile,
+        inherit_apifox_from_first_profile, move_rules_between_profiles, normalize_host,
+        reset_profile_rules, resolve_token, scope_apifox_rules_to_profile,
     };
     use crate::model::{
         DesktopSnapshot, LocalMockResponse, MatchMode, ProfileInput, ProjectProfile, ProxyRule,
@@ -1109,6 +1154,19 @@ mod tests {
         assert_eq!(result, Err("目标 Tab 已存在相同 Mock 接口".to_string()));
         assert_eq!(snapshot.profiles[0].rules.len(), 1);
         assert_eq!(snapshot.profiles[1].rules.len(), 1);
+    }
+
+    #[test]
+    fn delete_rules_is_atomic_when_any_selected_rule_is_missing() {
+        let mut profile = test_profile("profile");
+        profile.rules.push(test_rule("first", None));
+        profile.rules.push(test_rule("second", None));
+        let requested = ["first", "missing"].into_iter().collect::<BTreeSet<_>>();
+
+        let result = delete_rules_from_profile(&mut profile, &requested);
+
+        assert_eq!(result, Err("部分 Mock 接口不存在".to_string()));
+        assert_eq!(profile.rules.len(), 2);
     }
 
     fn test_profile(id: &str) -> ProjectProfile {

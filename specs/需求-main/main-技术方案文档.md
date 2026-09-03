@@ -83,6 +83,7 @@ Rust Application Services
 | R53 | 为 Tag 多选设置稳定宽度并关闭响应式标签测量；拆分验证、Tag 拉取和同步 loading 状态；在规则接口信息列增加复制图标和三行格式化剪贴板文本 | `ApifoxSyncPanel.tsx`、`RuleTable.tsx`、`App.css`、绑定文档 | GPT-5 Codex | 前端构建、源码约束、长 Tag 视觉检查、loading 状态源码检查、剪贴板文本单测/源码检查 | 已确认 |
 | R54 | 新增 `move_rules` Tauri 原子命令，在同一快照内校验源/目标 Profile、规则集合和目标 ID 冲突后完成批量迁移并持久化；规则引用的本地 Mock 响应在目标缺失时复制。`RuleTable` 复用一个目的 Tab Modal，操作列提供单条移动图标，“真机模拟”左侧提供批量移动按钮；其他 Tab 为空时禁用入口 | `commands.rs`、`lib.rs`、`desktop.ts`、`App.tsx`、`RuleTable.tsx`、测试和绑定文档 | GPT-5 Codex | Rust 原子移动单测、前端构建、源码约束、`cargo test`、`cargo fmt --check`、`git diff --check`、桌面人工移动验收 | 已确认 |
 | R55 | `create_profile` 在校验新 Profile ID 后读取 `current.profiles.first()`，仅克隆首个 Profile 的 `apifox` 连接对象到新 Profile；`build_profile` 仍初始化空 `synced_tags`/`active_tags`、空规则和关闭的全局 Mock。现有 `ApifoxSyncPanel` 按 Profile ID 变化从 `profile.apifox` 回显，无需新增前端状态或命令契约 | `commands.rs`、测试和绑定文档 | GPT-5 Codex | 新 Profile 连接配置继承/Tag 隔离单测、Rust 全量测试、前端构建、源码约束、格式与差异检查 | 已确认 |
+| R56 | Apifox 同步写入 Profile 前，将规则 ID 规范为 `apifox-{profile_id}-{source_operation_id}`，使同一接口在不同 Tab 中具有独立标识，同一 Tab 重复同步仍保持稳定。移动冲突校验兼容旧 ID 与新 ID：先比较 ID，再对 Apifox 来源比较 `source_operation_id`，只阻止目标 Tab 内产生同一接口的第二份规则 | `commands.rs`、测试和绑定文档 | GPT-5 Codex | Profile 级 ID 稳定/隔离测试、跨 Profile 移动业务身份冲突测试、Rust 全量测试、前端构建、源码约束、格式与差异检查 | 已确认 |
 | R12 | 建立 Rust 单元/集成、前端测试和本地双 upstream E2E；更新 README/使用文档；构建并校验 arm64 app/dmg | tests、scripts、docs、Tauri bundle | GPT-5 Codex | `pnpm build`、`check:source`、`cargo test`、E2E、codesign、hdiutil | 已确认 |
 
 ## 数据模型设计
@@ -489,15 +490,19 @@ Content-Type: application/json
 | 2026-08-31 | R53 Tag/Loading/接口信息复制修复 | 通过构建验证 | `pnpm build`、`pnpm run check:source`、`cargo check`、`git diff --check` 通过；长 Tag 视觉和剪贴板内容仍需桌面人工验收 |
 | 2026-09-03 | R54 Mock 接口跨 Tab 单条与批量移动 | 通过（自动视觉检查受限） | `cargo test --manifest-path src-tauri/Cargo.toml` 29 项通过，覆盖批量移动、本地响应依赖复制和目标 ID 冲突原子回滚；`pnpm build`、`pnpm run check:source`、`cargo check`、`cargo fmt --check`、`git diff --check` 通过；当前无可用浏览器实例，移动弹框与桌面持久化交互待人工验收 |
 | 2026-09-03 | R55 新建 Tab 继承 Apifox 配置 | 通过 | `cargo test --manifest-path src-tauri/Cargo.toml` 30 项通过，新增测试覆盖首个 Tab 的项目 ID、Mock 前缀和两个 Token 继承，以及 `syncedTags`/`activeTags` 保持为空；`pnpm build`、`pnpm run check:source`、`cargo check`、`cargo fmt --check`、`git diff --check` 通过 |
+| 2026-09-03 | R56 Mock 接口按 Tab 隔离 | 通过 | `cargo test --manifest-path src-tauri/Cargo.toml` 32 项通过，覆盖同一 Profile ID 稳定、不同 Profile ID 隔离，以及 Profile 级 ID 下目标 Tab 同一 Apifox operation 移动冲突；`pnpm build`、`pnpm run check:source`、`cargo check`、`cargo fmt --check`、`git diff --check` 通过；`mspecify review --only-new` 因当前环境未安装 `mspecify` 未执行 |
 | 2026-08-31 | 用户通过 `ac` 确认并完成 R53 | R53 | GPT-5 Codex | Tag Select 固定 420px 宽度且使用固定标签数量；验证、拉取、同步 loading 独立；接口信息复制包含源 URL、方法路径和 Apifox 地址 |
 | 2026-09-03 | 完成 R54 Mock 接口跨 Tab 移动 | R54 | GPT-5 Codex | 单条和批量入口复用目的 Tab 弹框；后端整批原子移动，目标冲突时不改动源数据，本地 Mock 响应依赖复制到目标；保留 Apifox 来源与后续 Replace 同步语义 |
 | 2026-09-03 | 完成 R55 新建 Tab 继承 Apifox 配置 | R55 | GPT-5 Codex | 创建新 Profile 时复制当前首个 Profile 的 Apifox 连接配置；Tag、规则、全局开关和本地响应继续按 Tab 隔离 |
+| 2026-09-03 | 完成 R56 Mock 接口按 Tab 隔离 | R56 | GPT-5 Codex | Apifox 同步规则 ID 增加 Profile 作用域；不同 Tab 可保存同一接口，同一 Tab 重复同步 ID 稳定；移动判重继续按 Apifox operation 约束目标 Tab 内重复 |
 | 2026-08-31 | 版本升级 | 已完成 | 应用版本由 0.1.39 升至 0.1.40 |
 | 2026-08-31 | 版本升级 | 已完成 | 应用版本由 0.1.40 升至 0.1.41 |
 | 2026-09-03 | 版本升级 | 已完成 | 应用版本由 0.1.41 升至 0.1.42 |
 | 2026-09-03 | 0.1.42 Mock 接口跨 Tab 移动交付包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；包内短版本与构建版本均为 0.1.42；ad-hoc 深度签名和 `hdiutil verify` 通过；DMG 为 5,481,459 bytes，SHA-256 `bee29cb3b683ce4b1ef411a0aec1ea7781e70c395482ba17baa15c91f5f9c4cd`；未配置 Apple 公证凭据 |
 | 2026-09-03 | 版本升级 | 已完成 | 应用版本由 0.1.42 升至 0.1.43 |
 | 2026-09-03 | 0.1.43 新建 Tab 继承 Apifox 配置交付包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；包内短版本与构建版本均为 0.1.43；ad-hoc 深度签名和 `hdiutil verify` 通过；DMG 为 5,477,394 bytes，SHA-256 `20d983cb900984da264b98a1ec1cc5e1e686425b81909bccc7fa29fb2c0b54ee`；未配置 Apple 公证凭据 |
+| 2026-09-03 | 版本升级 | 已完成 | 应用版本由 0.1.43 升至 0.1.44 |
+| 2026-09-03 | 0.1.44 Mock 接口按 Tab 隔离交付包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；包内短版本与构建版本均为 0.1.44；ad-hoc 深度签名和 `hdiutil verify` 通过；DMG 为 5,485,304 bytes，SHA-256 `7d00bd30d91b8c3d306801a68e17084a8577f0e0f67be8355cc9c0f326fcf12b`；未配置 Apple 公证凭据 |
 | 2026-08-27 | 0.1.9 用户安装验收 | 通过 | 用户确认验证通过并要求提交当前实现 |
 | 2026-08-27 | 微信开发者工具真实项目人工验收 | 待用户执行 | 需要用户的真实源域名、Apifox 项目、Token 和微信开发者工具环境；按 `main-使用与验收文档.md` 验收 |
 # R20 Ant Design UI 迁移方案

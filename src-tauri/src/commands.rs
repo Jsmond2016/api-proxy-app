@@ -145,6 +145,7 @@ pub async fn validate_apifox(
         &request.mock_prefix,
         &request.project_id,
     )?;
+    scope_apifox_rules_to_profile(&mut incoming, &request.profile_id);
     apply_mock_token(&mut incoming, &mock_token)?;
     let mut current = lock_snapshot(&state)?;
     let profile = current
@@ -217,6 +218,7 @@ pub async fn sync_apifox(
         &request.mock_prefix,
         &request.project_id,
     )?;
+    scope_apifox_rules_to_profile(&mut incoming, &request.profile_id);
     apply_mock_token(&mut incoming, &mock_token)?;
     let mut current = lock_snapshot(&state)?;
     let profile = current
@@ -562,6 +564,23 @@ fn reset_profile_rules(profile: &mut ProjectProfile) {
     profile.active_tags.clear();
 }
 
+fn scope_apifox_rules_to_profile(rules: &mut [ProxyRule], profile_id: &str) {
+    for rule in rules
+        .iter_mut()
+        .filter(|rule| rule.source == RuleSource::Apifox)
+    {
+        rule.id = format!("apifox-{profile_id}-{}", rule.source_operation_id);
+    }
+}
+
+fn rules_conflict(left: &ProxyRule, right: &ProxyRule) -> bool {
+    left.id == right.id
+        || (left.source == RuleSource::Apifox
+            && right.source == RuleSource::Apifox
+            && !left.source_operation_id.is_empty()
+            && left.source_operation_id == right.source_operation_id)
+}
+
 fn move_rules_between_profiles(
     snapshot: &mut DesktopSnapshot,
     source_profile_id: &str,
@@ -602,7 +621,7 @@ fn move_rules_between_profiles(
         snapshot.profiles[target_index]
             .rules
             .iter()
-            .any(|target_rule| target_rule.id == rule.id)
+            .any(|target_rule| rules_conflict(target_rule, rule))
     }) {
         return Err("目标 Tab 已存在相同 Mock 接口".to_string());
     }
@@ -849,6 +868,7 @@ mod tests {
     use super::{
         build_custom_rule, build_profile, inherit_apifox_from_first_profile,
         move_rules_between_profiles, normalize_host, reset_profile_rules, resolve_token,
+        scope_apifox_rules_to_profile,
     };
     use crate::model::{
         DesktopSnapshot, LocalMockResponse, MatchMode, ProfileInput, ProjectProfile, ProxyRule,
@@ -900,6 +920,20 @@ mod tests {
         assert_eq!(created.apifox.mock_token, "mock-token");
         assert!(created.synced_tags.is_empty());
         assert!(created.active_tags.is_empty());
+    }
+
+    #[test]
+    fn apifox_rule_ids_are_stable_within_a_profile_and_isolated_between_profiles() {
+        let mut first_sync = vec![test_apifox_rule("apifox-list-orders", "list-orders")];
+        let mut repeated_sync = first_sync.clone();
+        let mut other_profile_sync = first_sync.clone();
+
+        scope_apifox_rules_to_profile(&mut first_sync, "profile-a");
+        scope_apifox_rules_to_profile(&mut repeated_sync, "profile-a");
+        scope_apifox_rules_to_profile(&mut other_profile_sync, "profile-b");
+
+        assert_eq!(first_sync[0].id, repeated_sync[0].id);
+        assert_ne!(first_sync[0].id, other_profile_sync[0].id);
     }
 
     #[test]
@@ -1050,6 +1084,33 @@ mod tests {
         assert_eq!(snapshot.profiles[1].rules.len(), 1);
     }
 
+    #[test]
+    fn move_rules_rejects_same_apifox_operation_with_profile_scoped_ids() {
+        let mut source = test_profile("source");
+        source
+            .rules
+            .push(test_apifox_rule("apifox-source-operation", "operation"));
+        let mut target = test_profile("target");
+        target
+            .rules
+            .push(test_apifox_rule("apifox-target-operation", "operation"));
+        let mut snapshot = DesktopSnapshot {
+            profiles: vec![source, target],
+            ..DesktopSnapshot::default()
+        };
+
+        let result = move_rules_between_profiles(
+            &mut snapshot,
+            "source",
+            "target",
+            &["apifox-source-operation".to_string()],
+        );
+
+        assert_eq!(result, Err("目标 Tab 已存在相同 Mock 接口".to_string()));
+        assert_eq!(snapshot.profiles[0].rules.len(), 1);
+        assert_eq!(snapshot.profiles[1].rules.len(), 1);
+    }
+
     fn test_profile(id: &str) -> ProjectProfile {
         build_profile(ProfileInput {
             id: Some(id.to_string()),
@@ -1077,5 +1138,12 @@ mod tests {
             priority: 100,
             local_response_id: local_response_id.map(str::to_string),
         }
+    }
+
+    fn test_apifox_rule(id: &str, source_operation_id: &str) -> ProxyRule {
+        let mut rule = test_rule(id, None);
+        rule.source = RuleSource::Apifox;
+        rule.source_operation_id = source_operation_id.to_string();
+        rule
     }
 }

@@ -1,7 +1,7 @@
 import { Alert, App as AntApp, Button, Drawer, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Spin, Switch, Table, Tooltip } from "antd";
 import type { InputRef } from "antd";
 import type { TableColumnsType } from "antd";
-import { ChevronDown, ChevronUp, Copy, Pencil, Play, Plus, RotateCcw, Search, Trash2, WandSparkles } from "lucide-react";
+import { ChevronDown, ChevronUp, Copy, MoveRight, Pencil, Play, Plus, RotateCcw, Search, Trash2, WandSparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { MouseEvent } from "react";
@@ -10,7 +10,9 @@ import type { LocalMockResponse, MatchMode, OperationResolution, ProjectProfile,
 
 interface RuleTableProps {
   profile: ProjectProfile;
+  profiles: ProjectProfile[];
   onDelete: (ruleId: string) => Promise<void>;
+  onMove: (ruleIds: string[], targetProfileId: string) => Promise<void>;
   onOpenUrl: (url: string) => Promise<void>;
   onReset: () => Promise<void>;
   onResolve: (input: ResolveOperationInput) => Promise<OperationResolution>;
@@ -27,7 +29,21 @@ export function RuleTable(props: RuleTableProps) {
   const [creating, setCreating] = useState(false);
   const [togglingGlobal, setTogglingGlobal] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
+  const [movingRuleIds, setMovingRuleIds] = useState<string[]>([]);
+  const [targetProfileId, setTargetProfileId] = useState<string>();
+  const [moving, setMoving] = useState(false);
   const { message } = AntApp.useApp();
+  const targetProfiles = props.profiles.filter((profile) => profile.id !== props.profile.id);
+  let batchMoveHint: string | undefined;
+  if (targetProfiles.length === 0) batchMoveHint = "需要先创建其他 Tab";
+  else if (selectedRowKeys.length === 0) batchMoveHint = "请先勾选 Mock 接口";
+  let moveDialogTitle = "移动 Mock 接口";
+  if (movingRuleIds.length > 1) moveDialogTitle = `批量移动 ${movingRuleIds.length} 个 Mock 接口`;
+  useEffect(() => {
+    setSelectedRowKeys([]);
+    setMovingRuleIds([]);
+    setTargetProfileId(undefined);
+  }, [props.profile.id]);
   const visible = useMemo(() => {
     const query = keyword.trim().toLowerCase();
     if (!query) return props.profile.rules;
@@ -43,12 +59,30 @@ export function RuleTable(props: RuleTableProps) {
     }
   }
 
+  function startMove(ruleIds: string[]) {
+    setMovingRuleIds(ruleIds);
+    setTargetProfileId(undefined);
+  }
+
+  async function confirmMove() {
+    if (!targetProfileId) return;
+    setMoving(true);
+    try {
+      await props.onMove(movingRuleIds, targetProfileId);
+      setSelectedRowKeys((current) => current.filter((id) => !movingRuleIds.includes(id)));
+      setMovingRuleIds([]);
+      setTargetProfileId(undefined);
+    } finally {
+      setMoving(false);
+    }
+  }
+
   const columns = useMemo<TableColumnsType<ProxyRule>>(() => [
     { title: "Mock 开关", dataIndex: "enabled", width: 96, render: (_, rule) => <Switch aria-label={`切换${rule.name}`} checked={rule.enabled} onChange={(enabled) => props.onToggle(rule.id, enabled)} size="small" /> },
     { title: "接口信息", dataIndex: "name", width: 380, render: (_, rule) => <div className="rule-info-cell"><div className="rule-name-line"><strong>{rule.name}</strong><Tooltip title="复制接口信息"><Button aria-label="复制接口信息" className="row-action rule-copy-action" icon={<Copy size={14} />} onClick={() => { void copyRuleInfo(rule); }} type="text" /></Tooltip></div><span className="request-cell"><span className={`method-badge method-${rule.method.toLowerCase()}`}>{rule.method}</span><RulePath rule={rule} onOpenUrl={props.onOpenUrl} /></span></div> },
     { title: "Mock 目标", dataIndex: "target", width: 320, render: (_, rule) => <div className="target-cell"><span title={displayMockTarget(rule, props.localResponses)}>{displayMockTarget(rule, props.localResponses)}</span></div> },
-    { title: "操作", key: "actions", fixed: "right", width: 132, render: (_, rule) => <RuleActions globalMockEnabled={props.profile.globalMockEnabled} localResponses={props.localResponses} onDebugSingle={props.onDebugSingle} onDelete={props.onDelete} onEdit={setEditing} onOpenUrl={props.onOpenUrl} rule={rule} /> },
-  ], [props.localResponses, props.onDelete, props.onDebugSingle, props.onOpenUrl, props.onToggle, props.profile]);
+    { title: "操作", key: "actions", fixed: "right", width: 164, render: (_, rule) => <RuleActions canMove={targetProfiles.length > 0} globalMockEnabled={props.profile.globalMockEnabled} localResponses={props.localResponses} onDebugSingle={props.onDebugSingle} onDelete={props.onDelete} onEdit={setEditing} onMove={() => startMove([rule.id])} onOpenUrl={props.onOpenUrl} rule={rule} /> },
+  ], [props.localResponses, props.onDelete, props.onDebugSingle, props.onOpenUrl, props.onToggle, props.profile, targetProfiles.length]);
 
   return (
     <section className="rules-section">
@@ -56,6 +90,7 @@ export function RuleTable(props: RuleTableProps) {
         <div className="rules-heading-primary"><h2>Mock 接口 <Tooltip title={<div className="mock-help-tooltip"><div>• 全局 Mock 或当前接口开关未开启</div><div>• 真实接口域名或路径前缀不匹配</div><div>• Apifox Method 定义错误，例如 GET 请求定义为 POST</div><div>• 接口路径或匹配方式不一致</div><div>• HTTPS 证书未信任</div></div>}><span className="help-icon" aria-label="Mock 接口不生效排查提示">?</span></Tooltip></h2><Input allowClear className="search-field" placeholder="搜索接口名称、URL 或 Tag" prefix={<Search size={16} />} value={keyword} onChange={(event) => setKeyword(event.target.value)} /></div>
         <div className="rules-tools">
           <div className="global-mock-control"><span>全局 Mock</span><Switch aria-label="全局 Mock 开关" checked={props.profile.globalMockEnabled} loading={togglingGlobal} onChange={toggleGlobal} /></div>
+          <Tooltip title={batchMoveHint}><span><Button disabled={targetProfiles.length === 0 || selectedRowKeys.length === 0} icon={<MoveRight size={15} />} onClick={() => startMove(selectedRowKeys)}>批量移动</Button></span></Tooltip>
           <Button disabled={selectedRowKeys.length === 0} icon={<WandSparkles size={15} />} onClick={() => { void copySimulationPrompt(props.profile.rules.filter((rule) => selectedRowKeys.includes(rule.id)), message); }}>真机模拟</Button>
           <Button className="command-button" icon={<Plus size={16} />} onClick={() => setCreating(true)} type="primary">添加接口</Button>
           <Popconfirm cancelText="取消" description="将清空全部 Mock 接口及已同步 Tag，项目连接、Token 和全局开关保持不变。" disabled={props.profile.rules.length === 0} okButtonProps={{ danger: true }} okText="确认重置" onConfirm={async () => { await props.onReset(); setKeyword(""); }} title="重置 Mock 接口列表？">
@@ -64,14 +99,17 @@ export function RuleTable(props: RuleTableProps) {
         </div>
       </div>
       <div className="rule-table-wrap">
-        <Table<ProxyRule> columns={columns} dataSource={visible} locale={{ emptyText: <Empty description="尚无 Mock 接口。先同步 Apifox Tag，或手动添加接口。" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }} pagination={false} rowKey="id" rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys.map(String)) }} scroll={{ x: 1082 }} size="small" />
+        <Table<ProxyRule> columns={columns} dataSource={visible} locale={{ emptyText: <Empty description="尚无 Mock 接口。先同步 Apifox Tag，或手动添加接口。" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }} pagination={false} rowKey="id" rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys.map(String)) }} scroll={{ x: 1114 }} size="small" />
       </div>
       <RuleDialog key={editing?.id || String(creating)} localResponses={props.localResponses} profile={props.profile} rule={editing} visible={creating || Boolean(editing)} onClose={() => { setCreating(false); setEditing(null); }} onResolve={props.onResolve} onSave={props.onSave} />
+      <Modal cancelButtonProps={{ disabled: moving }} cancelText="取消" closable={!moving} confirmLoading={moving} keyboard={!moving} maskClosable={!moving} okButtonProps={{ disabled: !targetProfileId }} okText="确定移动" onCancel={() => setMovingRuleIds([])} onOk={() => { void confirmMove(); }} open={movingRuleIds.length > 0} title={moveDialogTitle}>
+        <Form layout="vertical"><Form.Item label="目的 Tab" required><Select autoFocus options={targetProfiles.map((profile) => ({ label: `${profile.name}（${profile.rules.length}）`, value: profile.id }))} placeholder="请选择目的 Tab" value={targetProfileId} onChange={setTargetProfileId} /></Form.Item></Form>
+      </Modal>
     </section>
   );
 }
 
-function RuleActions(props: { rule: ProxyRule; globalMockEnabled: boolean; localResponses: LocalMockResponse[]; onDelete: (ruleId: string) => Promise<void>; onEdit: (rule: ProxyRule) => void; onDebugSingle: (ruleId: string) => Promise<void>; onOpenUrl: (url: string) => Promise<void> }) {
+function RuleActions(props: { rule: ProxyRule; canMove: boolean; globalMockEnabled: boolean; localResponses: LocalMockResponse[]; onDelete: (ruleId: string) => Promise<void>; onEdit: (rule: ProxyRule) => void; onDebugSingle: (ruleId: string) => Promise<void>; onMove: () => void; onOpenUrl: (url: string) => Promise<void> }) {
   const [testing, setTesting] = useState(false);
   const [debugging, setDebugging] = useState(false);
   const [result, setResult] = useState<TestResult | null>(null);
@@ -131,7 +169,9 @@ function RuleActions(props: { rule: ProxyRule; globalMockEnabled: boolean; local
     setDebugging(true);
     try { await props.onDebugSingle(props.rule.id); } finally { setDebugging(false); }
   }
-  return <div className="row-actions"><Tooltip title="测试接口"><Button aria-label="测试接口" className="row-action" icon={<Play size={15} />} loading={testing} onClick={test} type="text" /></Tooltip><Tooltip title="仅调试当前接口"><Button aria-label="仅调试当前接口" className="row-action" icon={<span className="debug-single-icon">1</span>} loading={debugging} onClick={debugSingle} type="text" /></Tooltip><Tooltip title="编辑接口"><Button aria-label="编辑接口" className="row-action" icon={<Pencil size={15} />} onClick={() => props.onEdit(props.rule)} type="text" /></Tooltip><Popconfirm cancelText="取消" description="Apifox 接口可在后续同步相同 Tag 时重新生成。" okButtonProps={{ danger: true }} okText="确认删除" onConfirm={() => props.onDelete(props.rule.id)} title={`删除“${props.rule.name}”？`}><Tooltip title="删除接口"><Button aria-label="删除接口" className="row-action" danger icon={<Trash2 size={15} />} type="text" /></Tooltip></Popconfirm><Modal onCancel={() => setResult(null)} open={Boolean(result) || testing} title={`测试接口 · ${props.rule.name}`} width={700} footer={<div className="test-modal-footer"><Button icon={<RotateCcw size={15} />} loading={testing} onClick={() => { void test(); }}>重试</Button><Button disabled={!props.rule.apifoxWebUrl} onClick={() => { if (props.rule.apifoxWebUrl) { void props.onOpenUrl(props.rule.apifoxWebUrl); return; } void message.warning("当前接口没有可用的 Apifox 设置页面链接"); }} type="primary">去 Mock 接口</Button></div>}>{renderTestContent(testing, result, props.rule, responseSearch, updateResponseSearch, responseSearchRef, responseContainerRef, responseMatchIndex, matchCount, moveResponseMatch)}</Modal></div>;
+  let moveTitle = "需要先创建其他 Tab";
+  if (props.canMove) moveTitle = "移动接口";
+  return <div className="row-actions"><Tooltip title="测试接口"><Button aria-label="测试接口" className="row-action" icon={<Play size={15} />} loading={testing} onClick={test} type="text" /></Tooltip><Tooltip title="仅调试当前接口"><Button aria-label="仅调试当前接口" className="row-action" icon={<span className="debug-single-icon">1</span>} loading={debugging} onClick={debugSingle} type="text" /></Tooltip><Tooltip title="编辑接口"><Button aria-label="编辑接口" className="row-action" icon={<Pencil size={15} />} onClick={() => props.onEdit(props.rule)} type="text" /></Tooltip><Tooltip title={moveTitle}><span><Button aria-label="移动接口" className="row-action" disabled={!props.canMove} icon={<MoveRight size={15} />} onClick={props.onMove} type="text" /></span></Tooltip><Popconfirm cancelText="取消" description="Apifox 接口可在后续同步相同 Tag 时重新生成。" okButtonProps={{ danger: true }} okText="确认删除" onConfirm={() => props.onDelete(props.rule.id)} title={`删除“${props.rule.name}”？`}><Tooltip title="删除接口"><Button aria-label="删除接口" className="row-action" danger icon={<Trash2 size={15} />} type="text" /></Tooltip></Popconfirm><Modal onCancel={() => setResult(null)} open={Boolean(result) || testing} title={`测试接口 · ${props.rule.name}`} width={700} footer={<div className="test-modal-footer"><Button icon={<RotateCcw size={15} />} loading={testing} onClick={() => { void test(); }}>重试</Button><Button disabled={!props.rule.apifoxWebUrl} onClick={() => { if (props.rule.apifoxWebUrl) { void props.onOpenUrl(props.rule.apifoxWebUrl); return; } void message.warning("当前接口没有可用的 Apifox 设置页面链接"); }} type="primary">去 Mock 接口</Button></div>}>{renderTestContent(testing, result, props.rule, responseSearch, updateResponseSearch, responseSearchRef, responseContainerRef, responseMatchIndex, matchCount, moveResponseMatch)}</Modal></div>;
 }
 
 interface TestResult { status: number; statusText: string; body: string; error: string }

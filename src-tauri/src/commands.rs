@@ -406,6 +406,24 @@ pub fn delete_rule(
 }
 
 #[tauri::command]
+pub fn move_rules(
+    source_profile_id: String,
+    target_profile_id: String,
+    rule_ids: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<DesktopSnapshot, String> {
+    let mut current = lock_snapshot(&state)?;
+    move_rules_between_profiles(
+        &mut current,
+        &source_profile_id,
+        &target_profile_id,
+        &rule_ids,
+    )?;
+    state.persist(&current)?;
+    Ok(current.clone())
+}
+
+#[tauri::command]
 pub fn clear_rules(
     profile_id: String,
     state: State<'_, AppState>,
@@ -532,6 +550,82 @@ fn reset_profile_rules(profile: &mut ProjectProfile) {
     profile.rules.clear();
     profile.synced_tags.clear();
     profile.active_tags.clear();
+}
+
+fn move_rules_between_profiles(
+    snapshot: &mut DesktopSnapshot,
+    source_profile_id: &str,
+    target_profile_id: &str,
+    rule_ids: &[String],
+) -> Result<usize, String> {
+    if source_profile_id == target_profile_id {
+        return Err("请选择其他 Tab".to_string());
+    }
+    let requested_ids = rule_ids
+        .iter()
+        .map(|id| id.trim())
+        .filter(|id| !id.is_empty())
+        .collect::<BTreeSet<_>>();
+    if requested_ids.is_empty() {
+        return Err("请选择需要移动的 Mock 接口".to_string());
+    }
+    let source_index = snapshot
+        .profiles
+        .iter()
+        .position(|profile| profile.id == source_profile_id)
+        .ok_or_else(|| "源 Tab 不存在".to_string())?;
+    let target_index = snapshot
+        .profiles
+        .iter()
+        .position(|profile| profile.id == target_profile_id)
+        .ok_or_else(|| "目标 Tab 不存在".to_string())?;
+    let moved_rules = snapshot.profiles[source_index]
+        .rules
+        .iter()
+        .filter(|rule| requested_ids.contains(rule.id.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    if moved_rules.len() != requested_ids.len() {
+        return Err("部分 Mock 接口不存在".to_string());
+    }
+    if moved_rules.iter().any(|rule| {
+        snapshot.profiles[target_index]
+            .rules
+            .iter()
+            .any(|target_rule| target_rule.id == rule.id)
+    }) {
+        return Err("目标 Tab 已存在相同 Mock 接口".to_string());
+    }
+    let response_ids = moved_rules
+        .iter()
+        .filter_map(|rule| rule.local_response_id.as_deref())
+        .collect::<BTreeSet<_>>();
+    let moved_responses = snapshot.profiles[source_index]
+        .local_responses
+        .iter()
+        .filter(|response| response_ids.contains(response.id.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    if moved_responses.len() != response_ids.len() {
+        return Err("Mock 接口引用的本地预设响应不存在".to_string());
+    }
+
+    snapshot.profiles[source_index]
+        .rules
+        .retain(|rule| !requested_ids.contains(rule.id.as_str()));
+    let target = &mut snapshot.profiles[target_index];
+    for response in moved_responses {
+        if !target
+            .local_responses
+            .iter()
+            .any(|item| item.id == response.id)
+        {
+            target.local_responses.push(response);
+        }
+    }
+    let moved_count = moved_rules.len();
+    target.rules.extend(moved_rules);
+    Ok(moved_count)
 }
 
 fn validate_profile_input(input: &ProfileInput) -> Result<(String, Vec<String>, String), String> {
@@ -743,9 +837,13 @@ fn create_id(prefix: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_custom_rule, build_profile, normalize_host, reset_profile_rules, resolve_token,
+        build_custom_rule, build_profile, move_rules_between_profiles, normalize_host,
+        reset_profile_rules, resolve_token,
     };
-    use crate::model::{MatchMode, ProfileInput, ProxyRule, RuleInput, RuleSource};
+    use crate::model::{
+        DesktopSnapshot, LocalMockResponse, MatchMode, ProfileInput, ProjectProfile, ProxyRule,
+        RuleInput, RuleSource,
+    };
 
     #[test]
     fn normalizes_source_hosts() {
@@ -857,5 +955,96 @@ mod tests {
         assert_eq!(profile.apifox.mock_token, "mock-token");
         assert_eq!(profile.apifox.mock_prefix, "https://mock.example.test");
         assert!(profile.global_mock_enabled);
+    }
+
+    #[test]
+    fn move_rules_moves_all_selected_rules_and_copies_local_response_dependencies() {
+        let mut source = test_profile("source");
+        source.local_responses.push(LocalMockResponse {
+            id: "response".to_string(),
+            name: "Success".to_string(),
+            delay_ms: 0,
+            status: 200,
+            body: "{}".to_string(),
+        });
+        source.rules.push(test_rule("first", Some("response")));
+        source.rules.push(test_rule("second", None));
+        let target = test_profile("target");
+        let mut snapshot = DesktopSnapshot {
+            profiles: vec![source, target],
+            ..DesktopSnapshot::default()
+        };
+
+        let moved = move_rules_between_profiles(
+            &mut snapshot,
+            "source",
+            "target",
+            &[
+                "second".to_string(),
+                "first".to_string(),
+                "first".to_string(),
+            ],
+        )
+        .expect("rules should move");
+
+        assert_eq!(moved, 2);
+        assert!(snapshot.profiles[0].rules.is_empty());
+        assert_eq!(snapshot.profiles[1].rules.len(), 2);
+        assert_eq!(snapshot.profiles[1].rules[0].id, "first");
+        assert_eq!(snapshot.profiles[1].rules[1].id, "second");
+        assert_eq!(snapshot.profiles[1].local_responses.len(), 1);
+        assert_eq!(snapshot.profiles[1].local_responses[0].id, "response");
+    }
+
+    #[test]
+    fn move_rules_rejects_target_id_conflicts_without_changing_profiles() {
+        let mut source = test_profile("source");
+        source.rules.push(test_rule("duplicate", None));
+        let mut target = test_profile("target");
+        target.rules.push(test_rule("duplicate", None));
+        let mut snapshot = DesktopSnapshot {
+            profiles: vec![source, target],
+            ..DesktopSnapshot::default()
+        };
+
+        let result = move_rules_between_profiles(
+            &mut snapshot,
+            "source",
+            "target",
+            &["duplicate".to_string()],
+        );
+
+        assert_eq!(result, Err("目标 Tab 已存在相同 Mock 接口".to_string()));
+        assert_eq!(snapshot.profiles[0].rules.len(), 1);
+        assert_eq!(snapshot.profiles[1].rules.len(), 1);
+    }
+
+    fn test_profile(id: &str) -> ProjectProfile {
+        build_profile(ProfileInput {
+            id: Some(id.to_string()),
+            name: id.to_string(),
+            source_hosts: vec![format!("{id}.example.test")],
+            path_prefix: String::new(),
+            port: 8899,
+        })
+        .expect("profile should build")
+    }
+
+    fn test_rule(id: &str, local_response_id: Option<&str>) -> ProxyRule {
+        ProxyRule {
+            id: id.to_string(),
+            source: RuleSource::Custom,
+            source_operation_id: String::new(),
+            apifox_web_url: String::new(),
+            name: id.to_string(),
+            method: "GET".to_string(),
+            path: format!("/{id}"),
+            match_mode: MatchMode::Exact,
+            target: format!("https://mock.example.test/{id}"),
+            enabled: true,
+            tags: Vec::new(),
+            priority: 100,
+            local_response_id: local_response_id.map(str::to_string),
+        }
     }
 }

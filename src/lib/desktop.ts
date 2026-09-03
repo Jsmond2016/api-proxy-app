@@ -92,6 +92,10 @@ export async function deleteRule(profileId: string, ruleId: string) {
   return invokeDesktop("delete_rule", { profileId, ruleId });
 }
 
+export async function moveRules(sourceProfileId: string, targetProfileId: string, ruleIds: string[]) {
+  return invokeDesktop("move_rules", { sourceProfileId, targetProfileId, ruleIds });
+}
+
 export async function clearRules(profileId: string) {
   return invokeDesktop("clear_rules", { profileId });
 }

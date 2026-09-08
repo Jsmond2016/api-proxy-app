@@ -531,10 +531,31 @@ h2 {
 .rule-name-line strong {
   min-width: 0;
   flex: 1 1 auto;
+  overflow: hidden;
+  color: #345141;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rule-copy-action {
   flex: 0 0 24px;
+}
+
+.rule-name-link {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: #345141;
+  text-overflow: ellipsis;
+  text-decoration: underline;
+  text-decoration-color: #9bbfac;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+
+.rule-name-link:hover {
+  color: #1e593c;
+  text-decoration-color: currentColor;
 }
 
 @media (max-width: 720px) {
@@ -1105,6 +1126,21 @@ h2 {
 .rule-path-link:hover {
   color: #1e593c;
   text-decoration-color: currentColor;
+}
+
+.rule-path-copy {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: copy;
+}
+
+.rule-path-copy:hover {
+  color: #1e593c;
 }
 
 .method-get { background: #e5f0e4; color: #28714b; }

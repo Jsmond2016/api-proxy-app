@@ -4,7 +4,6 @@ import type { TableColumnsType } from "antd";
 import { ChevronDown, ChevronUp, Copy, MoveRight, Pencil, Play, Plus, RotateCcw, Search, Trash2, WandSparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
-import type { MouseEvent } from "react";
 import type { RefObject } from "react";
 import type { LocalMockResponse, MatchMode, OperationResolution, ProjectProfile, ProxyRule, ResolveOperationInput, RuleInput } from "../types";
 
@@ -92,7 +91,7 @@ export function RuleTable(props: RuleTableProps) {
 
   const columns = useMemo<TableColumnsType<ProxyRule>>(() => [
     { title: "Mock 开关", dataIndex: "enabled", width: 96, render: (_, rule) => <Switch aria-label={`切换${rule.name}`} checked={rule.enabled} disabled={props.disabled} onChange={(enabled) => props.onToggle(rule.id, enabled)} size="small" /> },
-    { title: "接口信息", dataIndex: "name", width: 380, render: (_, rule) => <div className="rule-info-cell"><div className="rule-name-line"><strong>{rule.name}</strong><Tooltip title="复制接口信息"><Button aria-label="复制接口信息" className="row-action rule-copy-action" icon={<Copy size={14} />} onClick={() => { void copyRuleInfo(rule); }} type="text" /></Tooltip></div><span className="request-cell"><span className={`method-badge method-${rule.method.toLowerCase()}`}>{rule.method}</span><RulePath rule={rule} onOpenUrl={props.onOpenUrl} /></span></div> },
+    { title: "接口信息", dataIndex: "name", width: 380, render: (_, rule) => <div className="rule-info-cell"><div className="rule-name-line"><Tooltip title="复制接口信息"><Button aria-label="复制接口信息" className="row-action rule-copy-action" icon={<Copy size={14} />} onClick={() => { void copyRuleInfo(rule); }} type="text" /></Tooltip>{rule.apifoxWebUrl ? <a className="rule-name-link" href={rule.apifoxWebUrl} onClick={(event) => { event.preventDefault(); void props.onOpenUrl(rule.apifoxWebUrl); }} title="在 Apifox Web 打开接口">{rule.name}</a> : <strong>{rule.name}</strong>}</div><span className="request-cell"><span className={`method-badge method-${rule.method.toLowerCase()}`}>{rule.method}</span><RulePath rule={rule} /></span></div> },
     { title: "Mock 目标", dataIndex: "target", width: 320, render: (_, rule) => <div className="target-cell"><span title={displayMockTarget(rule, props.localResponses)}>{displayMockTarget(rule, props.localResponses)}</span></div> },
     { title: "操作", key: "actions", fixed: "right", width: 164, render: (_, rule) => <RuleActions canMove={targetProfiles.length > 0} globalMockEnabled={props.profile.globalMockEnabled} localResponses={props.localResponses} onDebugSingle={props.onDebugSingle} onDelete={props.onDelete} onEdit={setEditing} onMove={() => startMove([rule.id])} onOpenUrl={props.onOpenUrl} rule={rule} /> },
   ], [props.disabled, props.localResponses, props.onDelete, props.onDebugSingle, props.onOpenUrl, props.onToggle, props.profile, targetProfiles.length]);
@@ -197,13 +196,11 @@ function responseMatchLabel(index: number, count: number) { if (count === 0) ret
 function countResponseMatches(body: string, query: string) { if (!query.trim()) return 0; return Array.from(body.matchAll(new RegExp(escapeRegExp(query), "gi"))).length; }
 function escapeRegExp(value: string) { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 
-function RulePath(props: { rule: ProxyRule; onOpenUrl: (url: string) => Promise<void> }) {
-  if (!props.rule.apifoxWebUrl) return <code>{props.rule.path}</code>;
-  function open(event: MouseEvent<HTMLAnchorElement>) {
-    event.preventDefault();
-    void props.onOpenUrl(props.rule.apifoxWebUrl);
+function RulePath(props: { rule: ProxyRule }) {
+  async function copyPath() {
+    try { await navigator.clipboard.writeText(props.rule.path); } catch { return; }
   }
-  return <a className="rule-path-link" href={props.rule.apifoxWebUrl} onClick={open} title="在 Apifox Web 打开接口"><code>{props.rule.path}</code></a>;
+  return <button className="rule-path-copy" onClick={() => { void copyPath(); }} title="复制接口 URL" type="button"><code>{props.rule.path}</code></button>;
 }
 
 function RuleDialog(props: { visible: boolean; profile: ProjectProfile; rule: ProxyRule | null; localResponses: LocalMockResponse[]; onClose: () => void; onResolve: (input: ResolveOperationInput) => Promise<OperationResolution>; onSave: (input: RuleInput) => Promise<void> }) {

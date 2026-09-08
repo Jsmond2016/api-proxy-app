@@ -21,7 +21,7 @@ function writeJson(file, value) {
 }
 
 function bumpVersion(version, type) {
-  const match = /^(\\d+)\\.(\\d+)\\.(\\d+)$/.exec(version);
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
   if (!match) throw new Error(`Invalid current version: ${version}`);
   let [major, minor, patch] = match.slice(1).map(Number);
   if (type === "major") { major += 1; minor = 0; patch = 0; }
@@ -44,8 +44,8 @@ for (const file of ["src-tauri/Cargo.toml", "src-tauri/Cargo.lock"]) {
   const filePath = path.join(root, file);
   const content = readFileSync(filePath, "utf8");
   const updated = file.endsWith("Cargo.toml")
-    ? content.replace(/^(version\\s*=\\s*)"[^\"]+"/m, `$1"${nextVersion}"`)
-    : content.replace(/(name = "tauri-app"[\\s\\S]*?version = )"[^\"]+"/, `$1"${nextVersion}"`);
+    ? content.replace(/^(version\s*=\s*)"[^\"]+"/m, `$1"${nextVersion}"`)
+    : content.replace(/(name = "tauri-app"[\s\S]*?version = )"[^\"]+"/, `$1"${nextVersion}"`);
   writeFileSync(filePath, updated);
 }
 

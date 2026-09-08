@@ -1109,7 +1109,7 @@ h2 {
 }
 
 .request-cell code,
-.rule-path-link {
+.rule-path-copy {
   min-width: 0;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -1123,7 +1123,7 @@ h2 {
   text-underline-offset: 2px;
 }
 
-.rule-path-link:hover {
+.rule-path-copy:hover {
   color: #1e593c;
   text-decoration-color: currentColor;
 }

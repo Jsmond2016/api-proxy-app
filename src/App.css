@@ -1128,7 +1128,7 @@ h2 {
   text-decoration-color: currentColor;
 }
 
-.rule-path-copy {
+.rule-path-link {
   min-width: 0;
   padding: 0;
   border: 0;
@@ -1139,7 +1139,7 @@ h2 {
   cursor: copy;
 }
 
-.rule-path-copy:hover {
+.rule-path-link:hover {
   color: #1e593c;
 }
 

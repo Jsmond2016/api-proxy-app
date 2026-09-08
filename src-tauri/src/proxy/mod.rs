@@ -203,22 +203,12 @@ impl RuleProxyHandler {
     }
 
     fn record_response(&mut self, response: &Response<Body>) {
-        let Some(log_id) = self.pending_log_id.as_ref() else {
-            return;
-        };
-        let Ok(mut snapshot) = self.snapshot.lock() else {
-            return;
-        };
-        let Some(log) = snapshot.logs.iter_mut().find(|log| &log.id == log_id) else {
-            return;
-        };
+        let Some(log_id) = self.pending_log_id.as_ref() else { return; };
+        let Ok(mut snapshot) = self.snapshot.lock() else { return; };
+        let Some(log) = snapshot.logs.iter_mut().find(|log| log.id == *log_id) else { return; };
         log.response_code = Some(response.status().as_u16());
-        if let Some(started_at) = self.started_at {
-            log.duration = elapsed_millis(started_at);
-        }
-        if let Some(app) = &self.app {
-            let _ = app.emit("proxy://request", log.clone());
-        }
+        if let Some(started_at) = self.started_at { log.duration = elapsed_millis(started_at); }
+        if let Some(app) = &self.app { let _ = app.emit("proxy://request", log.clone()); }
     }
 
     fn record_failure(&mut self, stage: &str) {
@@ -324,7 +314,9 @@ impl HttpHandler for RuleProxyHandler {
         response: Response<Body>,
     ) -> impl Future<Output = Response<Body>> + Send {
         self.record_response(&response);
-        async move { response }
+        async move {
+            response
+        }
     }
 
     fn handle_error(
@@ -373,6 +365,14 @@ impl MatchDecision {
 }
 
 pub async fn start_proxy(app: &AppHandle, state: &AppState) -> Result<DesktopSnapshot, String> {
+    let _lifecycle = state.proxy_lifecycle.lock().await;
+    start_proxy_unlocked(app, state).await
+}
+
+async fn start_proxy_unlocked(
+    app: &AppHandle,
+    state: &AppState,
+) -> Result<DesktopSnapshot, String> {
     {
         let runtime = state
             .proxy_runtime
@@ -412,6 +412,8 @@ pub async fn start_proxy(app: &AppHandle, state: &AppState) -> Result<DesktopSna
     let authority = RcgenAuthority::new(issuer, 1_000, aws_lc_rs::default_provider());
     let mock_token = resolve_mock_token(&profile);
     let (shutdown_sender, shutdown_receiver) = oneshot::channel::<()>();
+    let (stopped_sender, stopped_receiver) = oneshot::channel::<()>();
+    let runtime_id = state.next_proxy_runtime_id();
     let snapshot_for_handler = Arc::clone(&state.snapshot);
     let snapshot_for_task = Arc::clone(&state.snapshot);
     let runtime_for_task = Arc::clone(&state.proxy_runtime);
@@ -446,7 +448,9 @@ pub async fn start_proxy(app: &AppHandle, state: &AppState) -> Result<DesktopSna
             .lock()
             .map_err(|_| "proxy runtime is unavailable".to_string())?;
         *runtime = Some(ProxyRuntime {
+            id: runtime_id,
             shutdown: shutdown_sender,
+            stopped: stopped_receiver,
             profile_id: profile.id.clone(),
             port: profile.port,
             mock_token: runtime_mock_token,
@@ -481,19 +485,14 @@ pub async fn start_proxy(app: &AppHandle, state: &AppState) -> Result<DesktopSna
                 }
             }
         }
-        if let Ok(mut runtime) = runtime_for_task.lock() {
-            runtime.take();
-        }
+        clear_runtime_if_matches(&runtime_for_task, runtime_id);
+        let _ = stopped_sender.send(());
     });
     snapshot(state)
 }
 
 pub fn stop_proxy(app: &AppHandle, state: &AppState) -> Result<DesktopSnapshot, String> {
-    let runtime = state
-        .proxy_runtime
-        .lock()
-        .map_err(|_| "proxy runtime is unavailable".to_string())?
-        .take();
+    let runtime = take_proxy_runtime(state)?;
     if let Some(runtime) = runtime {
         let _ = runtime.shutdown.send(());
     }
@@ -505,6 +504,7 @@ pub async fn ensure_proxy_running(
     app: &AppHandle,
     state: &AppState,
 ) -> Result<DesktopSnapshot, String> {
+    let _lifecycle = state.proxy_lifecycle.lock().await;
     let desired = active_profile(state)?;
     let same_listener = {
         let current_runtime = state
@@ -520,21 +520,57 @@ pub async fn ensure_proxy_running(
         return snapshot(state);
     }
     if proxy_is_running(state)? {
-        stop_proxy(app, state)?;
-        sleep(Duration::from_millis(100)).await;
+        stop_proxy_and_wait(app, state).await?;
     }
-    start_proxy(app, state).await
+    start_proxy_unlocked(app, state).await
 }
 
 pub async fn restart_proxy(app: &AppHandle, state: &AppState) -> Result<DesktopSnapshot, String> {
+    let _lifecycle = state.proxy_lifecycle.lock().await;
     if proxy_is_running(state)? {
-        stop_proxy(app, state)?;
-        sleep(Duration::from_millis(100)).await;
+        stop_proxy_and_wait(app, state).await?;
     }
     if active_profile(state).is_err() {
         return snapshot(state);
     }
-    start_proxy(app, state).await
+    start_proxy_unlocked(app, state).await
+}
+
+async fn stop_proxy_and_wait(app: &AppHandle, state: &AppState) -> Result<(), String> {
+    let runtime = take_proxy_runtime(state)?;
+    let Some(runtime) = runtime else {
+        set_proxy_status(app, state, ProxyStatus::Stopped);
+        return Ok(());
+    };
+    let _ = runtime.shutdown.send(());
+    tokio::time::timeout(Duration::from_secs(5), runtime.stopped)
+        .await
+        .map_err(|_| "proxy did not stop within 5 seconds".to_string())
+        .and_then(|result| {
+            result.map_err(|_| "proxy shutdown confirmation was lost".to_string())
+        })?;
+    set_proxy_status(app, state, ProxyStatus::Stopped);
+    Ok(())
+}
+
+fn take_proxy_runtime(state: &AppState) -> Result<Option<ProxyRuntime>, String> {
+    let runtime = state
+        .proxy_runtime
+        .lock()
+        .map_err(|_| "proxy runtime is unavailable".to_string())?
+        .take();
+    Ok(runtime)
+}
+
+fn clear_runtime_if_matches(runtimes: &Arc<Mutex<Option<ProxyRuntime>>>, runtime_id: u64) {
+    if let Ok(mut runtime) = runtimes.lock() {
+        if runtime
+            .as_ref()
+            .is_some_and(|current| current.id == runtime_id)
+        {
+            runtime.take();
+        }
+    }
 }
 
 pub fn proxy_is_running(state: &AppState) -> Result<bool, String> {
@@ -792,11 +828,13 @@ fn system_error_log(error: &str) -> RequestLog {
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use super::{build_issuer, rewrite_request, template_matches, RuleProxyHandler};
+    use super::{
+        build_issuer, clear_runtime_if_matches, rewrite_request, template_matches, RuleProxyHandler,
+    };
     use crate::model::{
         ApifoxConnection, DesktopSnapshot, MatchMode, ProjectProfile, ProxyRule, RuleSource,
     };
-    use crate::state::AppState;
+    use crate::state::{AppState, ProxyRuntime};
     use hudsucker::rcgen::{
         CertificateParams, DistinguishedName, DnType, ExtendedKeyUsagePurpose, KeyPair,
         KeyUsagePurpose,
@@ -846,6 +884,31 @@ mod tests {
             priority: 100,
             local_response_id: None,
         }
+    }
+
+    #[test]
+    fn exited_proxy_only_clears_its_own_runtime() {
+        let (new_shutdown, _new_shutdown_receiver) = oneshot::channel();
+        let (_new_stopped_sender, new_stopped) = oneshot::channel();
+        let runtimes = Arc::new(Mutex::new(Some(ProxyRuntime {
+            id: 2,
+            shutdown: new_shutdown,
+            stopped: new_stopped,
+            profile_id: "new-profile".to_string(),
+            port: 8899,
+            mock_token: Arc::new(Mutex::new(None)),
+        })));
+
+        clear_runtime_if_matches(&runtimes, 1);
+
+        assert_eq!(
+            runtimes
+                .lock()
+                .expect("runtime should unlock")
+                .as_ref()
+                .map(|runtime| runtime.id),
+            Some(2)
+        );
     }
 
     #[test]
@@ -961,7 +1024,7 @@ mod tests {
                 .expect("request should read");
             let request = String::from_utf8_lossy(&request[..length]).to_string();
             stream
-                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 11\r\nConnection: close\r\n\r\n{\"ok\":true}")
                 .await
                 .expect("response should write");
             request
@@ -1014,7 +1077,10 @@ mod tests {
             .send()
             .await
             .expect("proxied request should succeed");
-        assert_eq!(response.text().await.expect("response body"), "ok");
+        assert_eq!(
+            response.text().await.expect("response body"),
+            "{\"ok\":true}"
+        );
         let upstream_request = upstream_task.await.expect("upstream task should finish");
         assert!(upstream_request.starts_with("GET /mock/v1/orders/42?page=2 HTTP/1.1"));
         assert!(upstream_request.contains(&format!("host: 127.0.0.1:{upstream_port}")));
@@ -1059,7 +1125,7 @@ mod tests {
             let request = String::from_utf8_lossy(&request[..length]).to_string();
             stream
                 .write_all(
-                    b"HTTP/1.1 200 OK\r\nContent-Length: 6\r\nConnection: close\r\n\r\nsecure",
+                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 15\r\nConnection: close\r\n\r\n{\"secure\":true}",
                 )
                 .await
                 .expect("response should write");
@@ -1109,7 +1175,10 @@ mod tests {
             .send()
             .await
             .expect("HTTPS request through CONNECT should succeed");
-        assert_eq!(response.text().await.expect("response body"), "secure");
+        assert_eq!(
+            response.text().await.expect("response body"),
+            "{\"secure\":true}"
+        );
         let request = upstream_task.await.expect("upstream task should finish");
         assert!(request.starts_with("GET /mock/v1/orders/42?mode=https HTTP/1.1"));
         let logs = snapshot

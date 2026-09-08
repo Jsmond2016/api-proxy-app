@@ -9,6 +9,7 @@ import type { RefObject } from "react";
 import type { LocalMockResponse, MatchMode, OperationResolution, ProjectProfile, ProxyRule, ResolveOperationInput, RuleInput } from "../types";
 
 interface RuleTableProps {
+  disabled: boolean;
   profile: ProjectProfile;
   profiles: ProjectProfile[];
   onDelete: (ruleId: string) => Promise<void>;
@@ -52,6 +53,7 @@ export function RuleTable(props: RuleTableProps) {
   }, [keyword, props.profile.rules]);
 
   async function toggleGlobal(enabled: boolean) {
+    if (props.disabled) return;
     setTogglingGlobal(true);
     try {
       await props.onToggleGlobal(enabled);
@@ -89,18 +91,18 @@ export function RuleTable(props: RuleTableProps) {
   }
 
   const columns = useMemo<TableColumnsType<ProxyRule>>(() => [
-    { title: "Mock 开关", dataIndex: "enabled", width: 96, render: (_, rule) => <Switch aria-label={`切换${rule.name}`} checked={rule.enabled} onChange={(enabled) => props.onToggle(rule.id, enabled)} size="small" /> },
+    { title: "Mock 开关", dataIndex: "enabled", width: 96, render: (_, rule) => <Switch aria-label={`切换${rule.name}`} checked={rule.enabled} disabled={props.disabled} onChange={(enabled) => props.onToggle(rule.id, enabled)} size="small" /> },
     { title: "接口信息", dataIndex: "name", width: 380, render: (_, rule) => <div className="rule-info-cell"><div className="rule-name-line"><strong>{rule.name}</strong><Tooltip title="复制接口信息"><Button aria-label="复制接口信息" className="row-action rule-copy-action" icon={<Copy size={14} />} onClick={() => { void copyRuleInfo(rule); }} type="text" /></Tooltip></div><span className="request-cell"><span className={`method-badge method-${rule.method.toLowerCase()}`}>{rule.method}</span><RulePath rule={rule} onOpenUrl={props.onOpenUrl} /></span></div> },
     { title: "Mock 目标", dataIndex: "target", width: 320, render: (_, rule) => <div className="target-cell"><span title={displayMockTarget(rule, props.localResponses)}>{displayMockTarget(rule, props.localResponses)}</span></div> },
     { title: "操作", key: "actions", fixed: "right", width: 164, render: (_, rule) => <RuleActions canMove={targetProfiles.length > 0} globalMockEnabled={props.profile.globalMockEnabled} localResponses={props.localResponses} onDebugSingle={props.onDebugSingle} onDelete={props.onDelete} onEdit={setEditing} onMove={() => startMove([rule.id])} onOpenUrl={props.onOpenUrl} rule={rule} /> },
-  ], [props.localResponses, props.onDelete, props.onDebugSingle, props.onOpenUrl, props.onToggle, props.profile, targetProfiles.length]);
+  ], [props.disabled, props.localResponses, props.onDelete, props.onDebugSingle, props.onOpenUrl, props.onToggle, props.profile, targetProfiles.length]);
 
   return (
     <section className="rules-section">
       <div className="section-heading">
         <div className="rules-heading-primary"><h2>Mock 接口 <Tooltip title={<div className="mock-help-tooltip"><div>• 全局 Mock 或当前接口开关未开启</div><div>• 真实接口域名或路径前缀不匹配</div><div>• Apifox Method 定义错误，例如 GET 请求定义为 POST</div><div>• 接口路径或匹配方式不一致</div><div>• HTTPS 证书未信任</div></div>}><span className="help-icon" aria-label="Mock 接口不生效排查提示">?</span></Tooltip></h2><Input allowClear className="search-field" placeholder="搜索接口名称、URL 或 Tag" prefix={<Search size={16} />} value={keyword} onChange={(event) => setKeyword(event.target.value)} /></div>
         <div className="rules-tools">
-          <div className="global-mock-control"><span>全局 Mock</span><Switch aria-label="全局 Mock 开关" checked={props.profile.globalMockEnabled} loading={togglingGlobal} onChange={toggleGlobal} /></div>
+          <div className="global-mock-control"><span>全局 Mock</span><Switch aria-label="全局 Mock 开关" checked={props.profile.globalMockEnabled} disabled={props.disabled} loading={togglingGlobal} onChange={toggleGlobal} /></div>
           <Tooltip title={batchMoveHint}><span><Button disabled={targetProfiles.length === 0 || selectedRowKeys.length === 0} icon={<MoveRight size={15} />} onClick={() => startMove(selectedRowKeys)}>批量移动</Button></span></Tooltip>
           <Button disabled={selectedRowKeys.length === 0} icon={<WandSparkles size={15} />} onClick={() => { void copySimulationPrompt(props.profile.rules.filter((rule) => selectedRowKeys.includes(rule.id)), message); }}>真机模拟</Button>
           <Button className="command-button" icon={<Plus size={16} />} onClick={() => setCreating(true)} type="primary">添加接口</Button>

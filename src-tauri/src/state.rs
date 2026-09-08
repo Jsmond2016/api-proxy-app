@@ -1,7 +1,10 @@
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc, Mutex,
+};
 
 #[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
@@ -12,7 +15,7 @@ use hudsucker::rcgen::{
 use hudsucker::rustls::pki_types::{pem::PemObject, CertificateDer};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Mutex as AsyncMutex};
 
 use crate::model::{
     ApifoxConnection, ApifoxMode, CertificateStatus, DesktopSnapshot, MatchMode, ProjectProfile,
@@ -22,12 +25,16 @@ use crate::model::{
 pub struct AppState {
     pub snapshot: Arc<Mutex<DesktopSnapshot>>,
     pub proxy_runtime: Arc<Mutex<Option<ProxyRuntime>>>,
+    pub proxy_lifecycle: AsyncMutex<()>,
+    next_proxy_runtime_id: AtomicU64,
     certificate_directory: PathBuf,
     storage_path: PathBuf,
 }
 
 pub struct ProxyRuntime {
+    pub id: u64,
     pub shutdown: oneshot::Sender<()>,
+    pub stopped: oneshot::Receiver<()>,
     pub profile_id: String,
     pub port: u16,
     pub mock_token: Arc<Mutex<Option<String>>>,
@@ -71,6 +78,8 @@ impl AppState {
         let state = Self {
             snapshot: Arc::new(Mutex::new(snapshot)),
             proxy_runtime: Arc::new(Mutex::new(None)),
+            proxy_lifecycle: AsyncMutex::new(()),
+            next_proxy_runtime_id: AtomicU64::new(1),
             certificate_directory,
             storage_path,
         };
@@ -112,6 +121,10 @@ impl AppState {
             return Ok(false);
         };
         runtime.update_mock_token(profile_id, token)
+    }
+
+    pub fn next_proxy_runtime_id(&self) -> u64 {
+        self.next_proxy_runtime_id.fetch_add(1, Ordering::Relaxed)
     }
 
     pub fn certificate_material(&self) -> Result<CertificateMaterial, String> {
@@ -475,9 +488,12 @@ mod tests {
         let directory = temporary_directory("apifox-proxy-runtime-token");
         let state = AppState::load(directory.clone()).expect("state should initialize");
         let (shutdown, _receiver) = oneshot::channel();
+        let (_stopped_sender, stopped) = oneshot::channel();
         let mock_token = Arc::new(Mutex::new(None));
         *state.proxy_runtime.lock().expect("runtime should unlock") = Some(ProxyRuntime {
+            id: 1,
             shutdown,
+            stopped,
             profile_id: "profile-a".to_string(),
             port: 8899,
             mock_token: Arc::clone(&mock_token),

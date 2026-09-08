@@ -46,7 +46,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
     }
   }
 
-  const tabItems = props.profiles.map((profile) => ({ key: profile.id, label: <span className="project-tab-label"><span>{profile.name}</span><small>{profile.rules.length}</small></span> }));
+  const tabItems = props.profiles.map((profile) => ({ disabled: props.disabled, key: profile.id, label: <span className="project-tab-label"><span>{profile.name}</span><small>{profile.rules.length}</small></span> }));
   return (
     <header className="project-sidebar">
       <div className="project-tabs-bar">

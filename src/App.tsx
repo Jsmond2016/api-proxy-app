@@ -23,6 +23,7 @@ function App() {
   const [diagnostics, setDiagnostics] = useState<DiagnosticEntry[]>([]);
   const [appVersion, setAppVersion] = useState(desktop.buildVersion);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+  const [proxyTransition, setProxyTransition] = useState(false);
   const allowCloseRef = useRef(false);
   const closeListenerRef = useRef<(() => void) | null>(null);
 
@@ -130,6 +131,15 @@ function App() {
     }
   }
 
+  async function applyProxyTransition(action: Promise<DesktopSnapshot>, label: string, notifySuccess = true) {
+    setProxyTransition(true);
+    try {
+      await apply(action, label, notifySuccess);
+    } finally {
+      setProxyTransition(false);
+    }
+  }
+
   async function validateApifox(request: ApifoxRequest) {
     setError("");
     recordDiagnostic("info", "Apifox 连接/接口解析", "请求已开始");
@@ -172,9 +182,11 @@ function App() {
           activeProfile={activeProfile}
           snapshot={snapshot}
           apply={apply}
+          applyProxyTransition={applyProxyTransition}
           execute={execute}
           appVersion={appVersion}
-          projectNavigation={{ activeProfileId: snapshot.activeProfileId, disabled: snapshot.proxyStatus === "starting", profiles: snapshot.profiles, onCreate: (input) => apply(desktop.createProfile(input), "创建项目"), onDelete: (id) => apply(desktop.deleteProfile(id), "删除项目"), onSelect: (id) => apply(desktop.setActiveProfile(id), "切换项目", false), onUpdate: (input) => apply(desktop.updateProfile(input), "更新项目") }}
+          proxyTransition={proxyTransition}
+          projectNavigation={{ activeProfileId: snapshot.activeProfileId, disabled: snapshot.proxyStatus === "starting" || proxyTransition, profiles: snapshot.profiles, onCreate: (input) => applyProxyTransition(desktop.createProfile(input), "创建项目"), onDelete: (id) => applyProxyTransition(desktop.deleteProfile(id), "删除项目"), onSelect: (id) => applyProxyTransition(desktop.setActiveProfile(id), "切换项目", false), onUpdate: (input) => applyProxyTransition(desktop.updateProfile(input), "更新项目") }}
           validateApifox={validateApifox}
         />
         <DiagnosticPanel entries={diagnostics} onClear={() => setDiagnostics([])} snapshot={snapshot} />
@@ -198,9 +210,11 @@ interface WorkspaceProps {
   activeProfile: DesktopSnapshot["profiles"][number] | null;
   snapshot: DesktopSnapshot;
   apply: (action: Promise<DesktopSnapshot>, label: string, notifySuccess?: boolean) => Promise<void>;
+  applyProxyTransition: (action: Promise<DesktopSnapshot>, label: string, notifySuccess?: boolean) => Promise<void>;
   execute: (action: Promise<unknown>, label: string) => Promise<void>;
   validateApifox: typeof desktop.validateApifox;
   projectNavigation: ComponentProps<typeof ProjectSidebar>;
+  proxyTransition: boolean;
   appVersion: string;
 }
 
@@ -210,7 +224,7 @@ function Workspace(props: WorkspaceProps) {
   const currentProfile = profile;
   const { message } = AntApp.useApp();
   async function debugSingle(ruleId: string) {
-    await props.apply(desktop.setGlobalMockEnabled(currentProfile.id, true), "开启全局 Mock", false);
+    await props.applyProxyTransition(desktop.setGlobalMockEnabled(currentProfile.id, true), "开启全局 Mock", false);
     const currentRule = currentProfile.rules.find((rule) => rule.id === ruleId);
     if (currentRule && !currentRule.enabled) {
       await props.apply(desktop.setRuleEnabled(currentProfile.id, ruleId, true), "开启当前接口 Mock", false);
@@ -233,8 +247,8 @@ function Workspace(props: WorkspaceProps) {
           <CertificatePanel certificate={props.snapshot.certificate} onGenerate={() => props.apply(desktop.generateCertificate(), "生成证书")} onOpen={() => props.execute(desktop.openCertificate(), "打开证书")} onRefresh={() => props.apply(desktop.refreshCertificate(), "刷新证书信任")} />
         </div>
       </div>
-      <RuleTable profiles={props.snapshot.profiles} profile={profile} localResponses={profile.localResponses} onDebugSingle={debugSingle} onDelete={(id) => props.apply(desktop.deleteRule(profile.id, id), "删除 Mock 接口")} onDeleteMany={(ids) => props.apply(desktop.deleteRules(profile.id, ids), "批量删除 Mock 接口")} onMove={(ruleIds, targetProfileId) => props.apply(desktop.moveRules(profile.id, targetProfileId, ruleIds), "移动 Mock 接口")} onOpenUrl={(url) => props.execute(desktop.openExternalUrl(url), "打开 Apifox 接口")} onResolve={desktop.resolveApifoxOperation} onSave={(input: RuleInput) => props.apply(desktop.saveRule(input), "保存 Mock 接口")} onToggle={(id, enabled) => props.apply(desktop.setRuleEnabled(profile.id, id, enabled), "切换接口 Mock")} onToggleGlobal={(enabled) => props.apply(desktop.setGlobalMockEnabled(profile.id, enabled), "切换全局 Mock")} />
-      <RequestLogPanel logs={props.snapshot.logs} onClear={() => props.apply(desktop.clearLogs(), "清空请求记录")} />
+      <RuleTable disabled={props.proxyTransition} profiles={props.snapshot.profiles} profile={profile} localResponses={profile.localResponses} onDebugSingle={debugSingle} onDelete={(id) => props.apply(desktop.deleteRule(profile.id, id), "删除 Mock 接口")} onDeleteMany={(ids) => props.apply(desktop.deleteRules(profile.id, ids), "批量删除 Mock 接口")} onMove={(ruleIds, targetProfileId) => props.apply(desktop.moveRules(profile.id, targetProfileId, ruleIds), "移动 Mock 接口")} onOpenUrl={(url) => props.execute(desktop.openExternalUrl(url), "打开 Apifox 接口")} onResolve={desktop.resolveApifoxOperation} onSave={(input: RuleInput) => props.apply(desktop.saveRule(input), "保存 Mock 接口")} onToggle={(id, enabled) => props.apply(desktop.setRuleEnabled(profile.id, id, enabled), "切换接口 Mock")} onToggleGlobal={(enabled) => props.applyProxyTransition(desktop.setGlobalMockEnabled(profile.id, enabled), "切换全局 Mock")} />
+      <RequestLogPanel logs={props.snapshot.logs} profiles={props.snapshot.profiles} onClear={() => props.apply(desktop.clearLogs(), "清空请求记录")} onOpenUrl={(url) => props.execute(desktop.openExternalUrl(url), "打开 Apifox 接口")} />
     </>
   );
 }

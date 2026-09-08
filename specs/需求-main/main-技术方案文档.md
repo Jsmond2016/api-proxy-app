@@ -86,6 +86,8 @@ Rust Application Services
 | R56 | Apifox 同步写入 Profile 前，将规则 ID 规范为 `apifox-{profile_id}-{source_operation_id}`，使同一接口在不同 Tab 中具有独立标识，同一 Tab 重复同步仍保持稳定。移动冲突校验兼容旧 ID 与新 ID：先比较 ID，再对 Apifox 来源比较 `source_operation_id`，只阻止目标 Tab 内产生同一接口的第二份规则 | `commands.rs`、测试和绑定文档 | GPT-5 Codex | Profile 级 ID 稳定/隔离测试、跨 Profile 移动业务身份冲突测试、Rust 全量测试、前端构建、源码约束、格式与差异检查 | 已确认 |
 | R57 | `ProjectSidebar` 的 `onSelect` 继续复用通用 `apply`，调用时传入 `notifySuccess=false`，关闭成功 Toast；异常处理和诊断记录不变 | `App.tsx` 和绑定文档 | GPT-5 Codex | 切换调用链源码检查、前端构建、源码约束和差异检查 | 已确认 |
 | R58 | 新增 `delete_rules` Tauri 命令，在当前 Profile 内去重校验选中的 rule ID，校验通过后一次性删除并持久化；`RuleTable` 将右上角重置入口替换为带 `Popconfirm` 的“批量删除”，无选中项禁用，成功后清空选择；保留既有单条删除和后端 `clear_rules` 兼容能力 | `commands.rs`、`lib.rs`、`desktop.ts`、`App.tsx`、`RuleTable.tsx`、测试和绑定文档 | GPT-5 Codex | Rust 编译/测试、批量删除调用链源码检查、前端构建、源码约束和差异检查 | 已确认 |
+| R59 | 代理生命周期以异步锁串行启动、重启和活动项目切换；停止时等待旧代理任务确认退出，运行实例使用单调 ID，异步退出仅清理自身 runtime；前端在代理切换期间禁用 Tab 和全局/单接口 Mock 开关，避免并发命令 | `state.rs`、`proxy/mod.rs`、`App.tsx`、`ProjectSidebar.tsx`、`RuleTable.tsx`、测试 | GPT-5 Codex | 运行实例身份隔离单测、Rust HTTP/HTTPS E2E、前端构建、源码约束、格式与差异检查 | 已确认 |
+| R60 | 已 Mock 且对应规则仍存在的请求记录行末提供查看入口；弹窗仅以标签和值展示命中规则的接口 URL、名称、Mock URL、本地预设、请求方式、匹配方式、Tags、优先级、开关和 Apifox Web 链接，不提供编辑或测试操作 | `App.tsx`、`RequestLogPanel.tsx`、`App.css` | GPT-5 Codex | 前端构建、查看入口状态与只读内容源码检查、差异检查 | 已确认 |
 | R12 | 建立 Rust 单元/集成、前端测试和本地双 upstream E2E；更新 README/使用文档；构建并校验 arm64 app/dmg | tests、scripts、docs、Tauri bundle | GPT-5 Codex | `pnpm build`、`check:source`、`cargo test`、E2E、codesign、hdiutil | 已确认 |
 
 ## 数据模型设计
@@ -500,6 +502,8 @@ Content-Type: application/json
 | 2026-09-03 | 完成 R56 Mock 接口按 Tab 隔离 | R56 | GPT-5 Codex | Apifox 同步规则 ID 增加 Profile 作用域；不同 Tab 可保存同一接口，同一 Tab 重复同步 ID 稳定；移动判重继续按 Apifox operation 约束目标 Tab 内重复 |
 | 2026-09-03 | 完成 R57 Tab 切换静默成功 | R57 | GPT-5 Codex | 切换 Tab 成功时不再弹 Toast；失败反馈和运行诊断继续保留 |
 | 2026-09-03 | 完成 R58 Mock 接口批量删除 | R58 | GPT-5 Codex | 右上角重置入口替换为带二次确认的批量删除，删除范围仅限当前 Tab 的已选接口 |
+| 2026-09-08 | 完成 R59 代理生命周期串行化 | R59 | GPT-5 Codex | 切换 Tab 与全局 Mock 重启等待旧监听退出；旧异步任务按运行实例 ID 清理，前端同步禁用冲突操作 |
+| 2026-09-08 | 完成 R60 请求记录规则查看 | R60 | GPT-5 Codex | 已 Mock 且规则仍存在的请求行末新增查看入口；弹窗只读展示命中规则信息 |
 | 2026-08-31 | 版本升级 | 已完成 | 应用版本由 0.1.39 升至 0.1.40 |
 | 2026-08-31 | 版本升级 | 已完成 | 应用版本由 0.1.40 升至 0.1.41 |
 | 2026-09-03 | 版本升级 | 已完成 | 应用版本由 0.1.41 升至 0.1.42 |
@@ -512,6 +516,10 @@ Content-Type: application/json
 | 2026-09-03 | 0.1.45 Tab 切换静默成功交付包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；包内短版本与构建版本均为 0.1.45；ad-hoc 深度签名和 `hdiutil verify` 通过；DMG 为 5,485,406 bytes，SHA-256 `03416d90db5e11abcf0812d44440050946c8fc269b04639544995836a79516c4`；未配置 Apple 公证凭据 |
 | 2026-09-03 | 版本升级 | 已完成 | 应用版本由 0.1.45 升至 0.1.46 |
 | 2026-09-03 | 0.1.46 Mock 接口批量删除交付包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；包内短版本与构建版本均为 0.1.46；ad-hoc 深度签名和 `hdiutil verify` 通过；DMG 为 5,485,459 bytes，SHA-256 `9eb866b316298f0c54eb8888af5a1f903ee73983a86cc6044a85e42befd298d2`；未配置 Apple 公证凭据 |
+| 2026-09-08 | 版本升级 | 已完成 | 应用版本由 0.1.46 升至 0.1.47，用于代理生命周期串行化修复 |
+| 2026-09-08 | 0.1.47 代理生命周期修复交付包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；包内短版本与构建版本均为 0.1.47；ad-hoc 深度签名和 `hdiutil verify` 通过；DMG 为 5,497,337 bytes，SHA-256 `30866c7d1827d43cf835ca19424448aff93f222722ffb8335886e1d6af12c760`；未配置 Apple 公证凭据 |
+| 2026-09-08 | 版本升级 | 已完成 | 应用版本由 0.1.47 升至 0.1.48，用于请求记录响应查看功能 |
+| 2026-09-08 | 0.1.48 请求记录响应查看交付包 | 通过 | `pnpm package:mac` 成功生成安装型 DMG；包内短版本与构建版本均为 0.1.48；ad-hoc 深度签名和 `hdiutil verify` 通过；DMG 为 5,490,872 bytes，SHA-256 `5bc2378a3c4f587e9a2b0fefcf456e4a78202f884c0f3b7c4c345eca8dd60864`；未配置 Apple 公证凭据 |
 | 2026-08-27 | 0.1.9 用户安装验收 | 通过 | 用户确认验证通过并要求提交当前实现 |
 | 2026-08-27 | 微信开发者工具真实项目人工验收 | 待用户执行 | 需要用户的真实源域名、Apifox 项目、Token 和微信开发者工具环境；按 `main-使用与验收文档.md` 验收 |
 # R20 Ant Design UI 迁移方案

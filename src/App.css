@@ -1245,6 +1245,11 @@ code {
   font-size: 9px;
 }
 
+.log-view-action {
+  width: 28px;
+  min-width: 28px;
+}
+
 @media (max-width: 1120px) {
   .workspace {
     padding: 26px;

@@ -62,6 +62,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
         onClose={() => { setCreating(false); setEditing(null); }}
         onCreate={props.onCreate}
         onUpdate={props.onUpdate}
+        prefill={props.profiles[0] || null}
         profile={editing}
         visible={creating || Boolean(editing)}
       />
@@ -88,6 +89,7 @@ function DeleteProjectDialog(props: { visible: boolean; busy: boolean; profile: 
 interface ProfileDialogProps {
   visible: boolean;
   profile: ProjectProfile | null;
+  prefill: ProjectProfile | null;
   onClose: () => void;
   onCreate: (input: ProfileInput) => Promise<void>;
   onUpdate: (input: ProfileInput) => Promise<void>;
@@ -101,14 +103,18 @@ function ProfileDialog(props: ProfileDialogProps) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!props.profile) {
+    if (props.profile) {
+      setName(props.profile.name);
+      setHosts(props.profile.sourceHosts.join(", "));
+      setPathPrefix(props.profile.pathPrefix);
+      setPort(String(props.profile.port));
       return;
     }
-    setName(props.profile.name);
-    setHosts(props.profile.sourceHosts.join(", "));
-    setPathPrefix(props.profile.pathPrefix);
-    setPort(String(props.profile.port));
-  }, [props.profile]);
+    setName("");
+    setHosts(props.prefill?.sourceHosts.join(", ") || "");
+    setPathPrefix(props.prefill?.pathPrefix || "");
+    setPort(String(props.prefill?.port || 8899));
+  }, [props.prefill, props.profile]);
 
   if (!props.visible) {
     return null;

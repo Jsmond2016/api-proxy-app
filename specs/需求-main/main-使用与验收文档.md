@@ -20,7 +20,7 @@ Token 填写在项目连接表单中，并随 Profile 写入应用数据 JSON。
 
 域名匹配先于规则匹配。不同域名上的相同路径不会被误转发。
 
-已有 Tab 时再新建 Tab，新 Tab 的 Apifox 弹框会预填首个 Tab 的项目 ID、Mock 前缀、Access Token 和 Mock Token。Tag 不会预填，仍需在新 Tab 验证连接后独立选择；Mock 接口、全局开关和本地响应也不会从首个 Tab 复制。
+已有 Tab 时再新建 Tab，创建弹窗会预填首个 Tab 的源域名、路径前缀和本地代理端口，用户只需修改项目名称即可提交；新 Tab 的 Apifox 弹框也会预填首个 Tab 的项目 ID、Mock 前缀、Access Token 和 Mock Token。Tag 不会预填，仍需在新 Tab 验证连接后独立选择；Mock 接口、全局开关和本地响应也不会从首个 Tab 复制。
 
 ## 3. 连接 Apifox 并同步 Tag
 

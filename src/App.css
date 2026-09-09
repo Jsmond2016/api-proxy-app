@@ -1452,8 +1452,13 @@ code {
 .preview-success { color: #25804d; }
 .preview-error { color: #ba5540; }
 
-.traffic-preview > pre {
-  max-height: 420px;
+.traffic-preview .response-payload {
+  grid-template-rows: auto 400px;
+  min-height: 0;
+}
+
+.traffic-preview .response-payload pre {
+  height: 400px;
   margin: 10px 0 0;
   padding: 12px;
   overflow: auto;
@@ -1494,6 +1499,14 @@ code {
   .traffic-arrow,
   .traffic-target {
     display: none;
+  }
+
+  .traffic-preview .response-payload {
+    grid-template-rows: auto 320px;
+  }
+
+  .traffic-preview .response-payload pre {
+    height: 320px;
   }
 }
 

@@ -109,6 +109,10 @@ export async function setRuleEnabled(profileId: string, ruleId: string, enabled:
   return invokeDesktop("set_rule_enabled", { profileId, ruleId, enabled });
 }
 
+export async function setAllRulesEnabled(profileId: string, enabled: boolean) {
+  return invokeDesktop("set_all_rules_enabled", { profileId, enabled });
+}
+
 export async function setGlobalMockEnabled(profileId: string, enabled: boolean) {
   return invokeDesktop("set_global_mock_enabled", { profileId, enabled });
 }

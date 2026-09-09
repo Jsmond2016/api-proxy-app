@@ -494,6 +494,23 @@ pub fn set_rule_enabled(
 }
 
 #[tauri::command]
+pub fn set_all_rules_enabled(
+    profile_id: String,
+    enabled: bool,
+    state: State<'_, AppState>,
+) -> Result<DesktopSnapshot, String> {
+    let mut current = lock_snapshot(&state)?;
+    let profile = current
+        .profiles
+        .iter_mut()
+        .find(|profile| profile.id == profile_id)
+        .ok_or_else(|| "profile was not found".to_string())?;
+    set_all_rules_enabled_in_profile(profile, enabled);
+    state.persist(&current)?;
+    Ok(current.clone())
+}
+
+#[tauri::command]
 pub async fn set_global_mock_enabled(
     app: AppHandle,
     profile_id: String,
@@ -701,6 +718,12 @@ fn reset_profile_rules(profile: &mut ProjectProfile) {
     profile.rules.clear();
     profile.synced_tags.clear();
     profile.active_tags.clear();
+}
+
+fn set_all_rules_enabled_in_profile(profile: &mut ProjectProfile, enabled: bool) {
+    for rule in &mut profile.rules {
+        rule.enabled = enabled;
+    }
 }
 
 fn delete_rules_from_profile(
@@ -1028,6 +1051,7 @@ mod tests {
         build_custom_rule, build_profile, delete_rules_from_profile,
         inherit_apifox_from_first_profile, move_rules_between_profiles, normalize_host,
         preview_context, reset_profile_rules, resolve_token, scope_apifox_rules_to_profile,
+        set_all_rules_enabled_in_profile,
     };
     use crate::model::{
         DesktopSnapshot, LocalMockResponse, MatchMode, ProfileInput, ProjectProfile, ProxyRule,
@@ -1281,6 +1305,19 @@ mod tests {
 
         assert_eq!(result, Err("部分 Mock 接口不存在".to_string()));
         assert_eq!(profile.rules.len(), 2);
+    }
+
+    #[test]
+    fn sets_all_rules_enabled_together() {
+        let mut profile = test_profile("profile");
+        let mut first = test_rule("first", None);
+        first.enabled = false;
+        profile.rules.push(first);
+        profile.rules.push(test_rule("second", None));
+
+        set_all_rules_enabled_in_profile(&mut profile, true);
+
+        assert!(profile.rules.iter().all(|rule| rule.enabled));
     }
 
     #[test]

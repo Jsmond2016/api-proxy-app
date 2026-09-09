@@ -16,6 +16,7 @@ interface RuleTableProps {
   onResolve: (input: ResolveOperationInput) => Promise<OperationResolution>;
   onSave: (input: RuleInput) => Promise<void>;
   onToggle: (ruleId: string, enabled: boolean) => Promise<void>;
+  onToggleAll: (enabled: boolean) => Promise<void>;
   onToggleGlobal: (enabled: boolean) => Promise<void>;
   onDebugSingle: (ruleId: string) => Promise<void>;
   localResponses: LocalMockResponse[];
@@ -26,6 +27,7 @@ export function RuleTable(props: RuleTableProps) {
   const [editing, setEditing] = useState<ProxyRule | null>(null);
   const [creating, setCreating] = useState(false);
   const [togglingGlobal, setTogglingGlobal] = useState(false);
+  const [togglingAllRules, setTogglingAllRules] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [movingRuleIds, setMovingRuleIds] = useState<string[]>([]);
   const [targetProfileId, setTargetProfileId] = useState<string>();
@@ -59,6 +61,17 @@ export function RuleTable(props: RuleTableProps) {
     }
   }
 
+  async function toggleAllRules(enabled: boolean) {
+    if (props.disabled || togglingAllRules) return;
+    if (props.profile.rules.length === 0) return;
+    setTogglingAllRules(true);
+    try {
+      await props.onToggleAll(enabled);
+    } finally {
+      setTogglingAllRules(false);
+    }
+  }
+
   function startMove(ruleIds: string[]) {
     setMovingRuleIds(ruleIds);
     setTargetProfileId(undefined);
@@ -88,11 +101,11 @@ export function RuleTable(props: RuleTableProps) {
   }
 
   const columns = useMemo<TableColumnsType<ProxyRule>>(() => [
-    { title: "Mock 开关", dataIndex: "enabled", width: 96, render: (_, rule) => <Switch aria-label={`切换${rule.name}`} checked={rule.enabled} disabled={props.disabled} onChange={(enabled) => props.onToggle(rule.id, enabled)} size="small" /> },
+    { title: <Space size={4}><span>Mock 开关</span><Tooltip title="统一开启或关闭当前 Tab 的全部 Mock 接口"><Switch aria-label="批量切换当前 Tab 的全部 Mock 接口" checked={props.profile.rules.length > 0 && props.profile.rules.every((rule) => rule.enabled)} disabled={props.disabled || togglingAllRules || props.profile.rules.length === 0} loading={togglingAllRules} onChange={toggleAllRules} size="small" /></Tooltip></Space>, dataIndex: "enabled", width: 144, render: (_, rule) => <Switch aria-label={`切换${rule.name}`} checked={rule.enabled} disabled={props.disabled || togglingAllRules} onChange={(enabled) => props.onToggle(rule.id, enabled)} size="small" /> },
     { title: "接口信息", dataIndex: "name", width: 380, render: (_, rule) => <div className="rule-info-cell"><div className="rule-name-line"><Tooltip title="复制接口信息"><Button aria-label="复制接口信息" className="row-action rule-copy-action" icon={<Copy size={14} />} onClick={() => { void copyRuleInfo(rule, message); }} type="text" /></Tooltip><RuleNameLink onOpenUrl={props.onOpenUrl} rule={rule} /></div><span className="request-cell"><span className={`method-badge method-${rule.method.toLowerCase()}`}>{rule.method}</span><RulePath rule={rule} /></span></div> },
     { title: "Mock 目标", dataIndex: "target", width: 320, render: (_, rule) => <div className="target-cell"><span title={displayMockTarget(rule, props.localResponses)}>{displayMockTarget(rule, props.localResponses)}</span></div> },
     { title: "操作", key: "actions", fixed: "right", width: 164, render: (_, rule) => <RuleActions canMove={targetProfiles.length > 0} globalMockEnabled={props.profile.globalMockEnabled} localResponses={props.localResponses} onDebugSingle={props.onDebugSingle} onDelete={props.onDelete} onEdit={setEditing} onMove={() => startMove([rule.id])} onOpenUrl={props.onOpenUrl} rule={rule} /> },
-  ], [props.disabled, props.localResponses, props.onDelete, props.onDebugSingle, props.onOpenUrl, props.onToggle, props.profile, targetProfiles.length]);
+  ], [props.disabled, props.localResponses, props.onDelete, props.onDebugSingle, props.onOpenUrl, props.onToggle, props.onToggleAll, props.profile, targetProfiles.length, togglingAllRules]);
 
   return (
     <section className="rules-section">
@@ -109,7 +122,7 @@ export function RuleTable(props: RuleTableProps) {
         </div>
       </div>
       <div className="rule-table-wrap">
-        <Table<ProxyRule> columns={columns} dataSource={visible} locale={{ emptyText: <Empty description="尚无 Mock 接口。先同步 Apifox Tag，或手动添加接口。" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }} pagination={false} rowKey="id" rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys.map(String)) }} scroll={{ x: 1114 }} size="small" />
+        <Table<ProxyRule> columns={columns} dataSource={visible} locale={{ emptyText: <Empty description="尚无 Mock 接口。先同步 Apifox Tag，或手动添加接口。" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }} pagination={false} rowKey="id" rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys.map(String)) }} scroll={{ x: 1162 }} size="small" />
       </div>
       <RuleDialog key={editing?.id || String(creating)} localResponses={props.localResponses} profile={props.profile} rule={editing} visible={creating || Boolean(editing)} onClose={() => { setCreating(false); setEditing(null); }} onResolve={props.onResolve} onSave={props.onSave} />
       <Modal cancelButtonProps={{ disabled: moving }} cancelText="取消" closable={!moving} confirmLoading={moving} keyboard={!moving} maskClosable={!moving} okButtonProps={{ disabled: !targetProfileId }} okText="确定移动" onCancel={() => setMovingRuleIds([])} onOk={() => { void confirmMove(); }} open={movingRuleIds.length > 0} title={moveDialogTitle}>

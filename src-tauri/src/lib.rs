@@ -8,8 +8,8 @@ use commands::{
     clear_logs, clear_rules, create_profile, delete_local_response, delete_profile, delete_rule,
     delete_rules, generate_certificate, get_snapshot, move_rules, open_certificate,
     preview_mock_response, refresh_certificate, resolve_apifox_operation, save_local_response,
-    save_rule, set_active_profile, set_global_mock_enabled, set_rule_enabled, start_proxy,
-    stop_proxy, sync_apifox, update_profile, validate_apifox,
+    save_rule, set_active_profile, set_all_rules_enabled, set_global_mock_enabled,
+    set_rule_enabled, start_proxy, stop_proxy, sync_apifox, update_profile, validate_apifox,
 };
 use state::AppState;
 use tauri::{Emitter, Manager};
@@ -46,6 +46,7 @@ pub fn run() {
             set_active_profile,
             set_global_mock_enabled,
             set_rule_enabled,
+            set_all_rules_enabled,
             save_rule,
             save_local_response,
             delete_local_response,

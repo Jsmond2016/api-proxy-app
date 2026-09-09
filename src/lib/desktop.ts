@@ -12,6 +12,7 @@ import type {
   RequestLog,
   RuleInput,
   LocalMockResponseInput,
+  MockResponsePreview,
 } from "../types";
 
 export function isDesktopRuntime() {
@@ -136,6 +137,13 @@ export async function openExternalUrl(url: string) {
 
 export async function clearLogs() {
   return invokeDesktop("clear_logs");
+}
+
+export async function previewMockResponse(logId: string) {
+  if (!isDesktopRuntime()) {
+    return desktopRequired();
+  }
+  return invoke<MockResponsePreview>("preview_mock_response", { logId });
 }
 
 export async function subscribeProxyEvents(

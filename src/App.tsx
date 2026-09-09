@@ -248,7 +248,7 @@ function Workspace(props: WorkspaceProps) {
         </div>
       </div>
       <RuleTable disabled={props.proxyTransition} profiles={props.snapshot.profiles} profile={profile} localResponses={profile.localResponses} onDebugSingle={debugSingle} onDelete={(id) => props.apply(desktop.deleteRule(profile.id, id), "删除 Mock 接口")} onDeleteMany={(ids) => props.apply(desktop.deleteRules(profile.id, ids), "批量删除 Mock 接口")} onMove={(ruleIds, targetProfileId) => props.apply(desktop.moveRules(profile.id, targetProfileId, ruleIds), "移动 Mock 接口")} onOpenUrl={(url) => props.execute(desktop.openExternalUrl(url), "打开 Apifox 接口")} onResolve={desktop.resolveApifoxOperation} onSave={(input: RuleInput) => props.apply(desktop.saveRule(input), "保存 Mock 接口")} onToggle={(id, enabled) => props.apply(desktop.setRuleEnabled(profile.id, id, enabled), "切换接口 Mock")} onToggleGlobal={(enabled) => props.applyProxyTransition(desktop.setGlobalMockEnabled(profile.id, enabled), "切换全局 Mock")} />
-      <RequestLogPanel logs={props.snapshot.logs} profiles={props.snapshot.profiles} onClear={() => props.apply(desktop.clearLogs(), "清空请求记录")} onOpenUrl={(url) => props.execute(desktop.openExternalUrl(url), "打开 Apifox 接口")} />
+      <RequestLogPanel logs={props.snapshot.logs} profiles={props.snapshot.profiles} onClear={() => props.apply(desktop.clearLogs(), "清空请求记录")} onPreview={desktop.previewMockResponse} />
     </>
   );
 }

@@ -91,7 +91,7 @@ export function RuleTable(props: RuleTableProps) {
 
   const columns = useMemo<TableColumnsType<ProxyRule>>(() => [
     { title: "Mock 开关", dataIndex: "enabled", width: 96, render: (_, rule) => <Switch aria-label={`切换${rule.name}`} checked={rule.enabled} disabled={props.disabled} onChange={(enabled) => props.onToggle(rule.id, enabled)} size="small" /> },
-    { title: "接口信息", dataIndex: "name", width: 380, render: (_, rule) => <div className="rule-info-cell"><div className="rule-name-line"><Tooltip title="复制接口信息"><Button aria-label="复制接口信息" className="row-action rule-copy-action" icon={<Copy size={14} />} onClick={() => { void copyRuleInfo(rule, message); }} type="text" /></Tooltip>{rule.apifoxWebUrl ? <a className="rule-name-link" href={rule.apifoxWebUrl} onClick={(event) => { event.preventDefault(); void props.onOpenUrl(rule.apifoxWebUrl); }} title="在 Apifox Web 打开接口">{rule.name}</a> : <strong>{rule.name}</strong>}</div><span className="request-cell"><span className={`method-badge method-${rule.method.toLowerCase()}`}>{rule.method}</span><RulePath rule={rule} /></span></div> },
+    { title: "接口信息", dataIndex: "name", width: 380, render: (_, rule) => <div className="rule-info-cell"><div className="rule-name-line"><Tooltip title="复制接口信息"><Button aria-label="复制接口信息" className="row-action rule-copy-action" icon={<Copy size={14} />} onClick={() => { void copyRuleInfo(rule, message); }} type="text" /></Tooltip><RuleNameLink onOpenUrl={props.onOpenUrl} rule={rule} /></div><span className="request-cell"><span className={`method-badge method-${rule.method.toLowerCase()}`}>{rule.method}</span><RulePath rule={rule} /></span></div> },
     { title: "Mock 目标", dataIndex: "target", width: 320, render: (_, rule) => <div className="target-cell"><span title={displayMockTarget(rule, props.localResponses)}>{displayMockTarget(rule, props.localResponses)}</span></div> },
     { title: "操作", key: "actions", fixed: "right", width: 164, render: (_, rule) => <RuleActions canMove={targetProfiles.length > 0} globalMockEnabled={props.profile.globalMockEnabled} localResponses={props.localResponses} onDebugSingle={props.onDebugSingle} onDelete={props.onDelete} onEdit={setEditing} onMove={() => startMove([rule.id])} onOpenUrl={props.onOpenUrl} rule={rule} /> },
   ], [props.disabled, props.localResponses, props.onDelete, props.onDebugSingle, props.onOpenUrl, props.onToggle, props.profile, targetProfiles.length]);
@@ -119,6 +119,11 @@ export function RuleTable(props: RuleTableProps) {
       </Modal>
     </section>
   );
+}
+
+function RuleNameLink(props: { rule: ProxyRule; onOpenUrl: (url: string) => Promise<void> }) {
+  if (!props.rule.apifoxWebUrl) return <strong>{props.rule.name}</strong>;
+  return <a className="rule-name-link" href={props.rule.apifoxWebUrl} onClick={(event) => { event.preventDefault(); void props.onOpenUrl(props.rule.apifoxWebUrl); }} title="在 Apifox Web 打开接口">{props.rule.name}</a>;
 }
 
 function RuleActions(props: { rule: ProxyRule; canMove: boolean; globalMockEnabled: boolean; localResponses: LocalMockResponse[]; onDelete: (ruleId: string) => Promise<void>; onEdit: (rule: ProxyRule) => void; onDebugSingle: (ruleId: string) => Promise<void>; onMove: () => void; onOpenUrl: (url: string) => Promise<void> }) {

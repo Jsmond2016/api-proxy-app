@@ -203,12 +203,22 @@ impl RuleProxyHandler {
     }
 
     fn record_response(&mut self, response: &Response<Body>) {
-        let Some(log_id) = self.pending_log_id.as_ref() else { return; };
-        let Ok(mut snapshot) = self.snapshot.lock() else { return; };
-        let Some(log) = snapshot.logs.iter_mut().find(|log| log.id == *log_id) else { return; };
+        let Some(log_id) = self.pending_log_id.as_ref() else {
+            return;
+        };
+        let Ok(mut snapshot) = self.snapshot.lock() else {
+            return;
+        };
+        let Some(log) = snapshot.logs.iter_mut().find(|log| log.id == *log_id) else {
+            return;
+        };
         log.response_code = Some(response.status().as_u16());
-        if let Some(started_at) = self.started_at { log.duration = elapsed_millis(started_at); }
-        if let Some(app) = &self.app { let _ = app.emit("proxy://request", log.clone()); }
+        if let Some(started_at) = self.started_at {
+            log.duration = elapsed_millis(started_at);
+        }
+        if let Some(app) = &self.app {
+            let _ = app.emit("proxy://request", log.clone());
+        }
     }
 
     fn record_failure(&mut self, stage: &str) {
@@ -314,9 +324,7 @@ impl HttpHandler for RuleProxyHandler {
         response: Response<Body>,
     ) -> impl Future<Output = Response<Body>> + Send {
         self.record_response(&response);
-        async move {
-            response
-        }
+        async move { response }
     }
 
     fn handle_error(
@@ -712,6 +720,28 @@ fn rewrite_request(
     rule: &ProxyRule,
     mock_token: Option<&str>,
 ) -> Result<String, String> {
+    let target = rewrite_target_url(&request_source(request), rule, mock_token)?;
+    let target_url =
+        Url::parse(&target).map_err(|error| format!("Mock target URI is invalid: {error}"))?;
+    let host = target_url
+        .host_str()
+        .ok_or_else(|| "Mock target does not include a host".to_string())?;
+    let host_value = build_host_value(host, target_url.port());
+    let target_uri =
+        Uri::from_str(&target).map_err(|error| format!("Mock target URI is invalid: {error}"))?;
+    let header_value = HeaderValue::from_str(&host_value)
+        .map_err(|error| format!("Mock target host is invalid: {error}"))?;
+    *request.uri_mut() = target_uri;
+    request.headers_mut().insert(HOST, header_value);
+    Ok(target)
+}
+
+pub(crate) fn rewrite_target_url(
+    source: &str,
+    rule: &ProxyRule,
+    mock_token: Option<&str>,
+) -> Result<String, String> {
+    let source = Url::parse(source).map_err(|error| format!("Request URL is invalid: {error}"))?;
     let mut target =
         Url::parse(&rule.target).map_err(|error| format!("Mock target is invalid: {error}"))?;
     if rule.match_mode == MatchMode::Template {
@@ -719,14 +749,14 @@ fn rewrite_request(
         let template_url = Url::parse(&format!("https://template.invalid{}", rule.path))
             .map_err(|error| format!("Rule template path is invalid: {error}"))?;
         if let Some(prefix) = target_path.strip_suffix(template_url.path()) {
-            target.set_path(&format!("{prefix}{}", request.uri().path()));
+            target.set_path(&format!("{prefix}{}", source.path()));
         }
     }
     let mut query = target
         .query_pairs()
         .map(|(key, value)| (key.to_string(), value.to_string()))
         .collect::<BTreeMap<_, _>>();
-    if let Some(request_query) = request.uri().query() {
+    if let Some(request_query) = source.query() {
         for (key, value) in url::form_urlencoded::parse(request_query.as_bytes()) {
             query.insert(key.to_string(), value.to_string());
         }
@@ -741,16 +771,6 @@ fn rewrite_request(
             serializer.append_pair(&key, &value);
         }
     }
-    let host = target
-        .host_str()
-        .ok_or_else(|| "Mock target does not include a host".to_string())?;
-    let host_value = build_host_value(host, target.port());
-    let target_uri = Uri::from_str(target.as_str())
-        .map_err(|error| format!("Mock target URI is invalid: {error}"))?;
-    let header_value = HeaderValue::from_str(&host_value)
-        .map_err(|error| format!("Mock target host is invalid: {error}"))?;
-    *request.uri_mut() = target_uri;
-    request.headers_mut().insert(HOST, header_value);
     Ok(target.to_string())
 }
 
@@ -769,7 +789,7 @@ fn request_source(request: &Request<Body>) -> String {
     format!("https://{host}{}", request.uri())
 }
 
-fn sanitize_url(value: &str) -> String {
+pub(crate) fn sanitize_url(value: &str) -> String {
     let Ok(mut url) = Url::parse(value) else {
         return value.to_string();
     };

@@ -1,6 +1,8 @@
 use std::collections::BTreeSet;
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+
+use reqwest::Method;
 
 use tauri::{AppHandle, State};
 
@@ -9,8 +11,9 @@ use crate::apifox::{
 };
 use crate::model::{
     ApifoxConnection, ApifoxMode, ApifoxPreview, ApifoxRequest, DesktopSnapshot, InterfacePreview,
-    LocalMockResponse, LocalMockResponseInput, MatchMode, OperationResolution, ProfileInput,
-    ProjectProfile, ProxyRule, ResolveOperationInput, ResolvedInterface, RuleInput, RuleSource,
+    LocalMockResponse, LocalMockResponseInput, MatchMode, MockResponsePreview, OperationResolution,
+    ProfileInput, ProjectProfile, ProxyRule, RequestLog, ResolveOperationInput, ResolvedInterface,
+    RuleInput, RuleSource,
 };
 use crate::proxy;
 use crate::state::AppState;
@@ -545,6 +548,117 @@ pub fn clear_logs(state: State<'_, AppState>) -> Result<DesktopSnapshot, String>
 }
 
 #[tauri::command]
+pub async fn preview_mock_response(
+    log_id: String,
+    state: State<'_, AppState>,
+) -> Result<MockResponsePreview, String> {
+    let (log, profile, rule) = {
+        let current = lock_snapshot(&state)?;
+        preview_context(&current, &log_id)?
+    };
+    if let Some(response) = rule
+        .local_response_id
+        .as_ref()
+        .and_then(|id| profile.local_responses.iter().find(|item| &item.id == id))
+    {
+        let started_at = Instant::now();
+        if response.delay_ms > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(response.delay_ms)).await;
+        }
+        return Ok(MockResponsePreview {
+            source: "local".to_string(),
+            request_url: "local://response".to_string(),
+            status: response.status,
+            status_text: format!("HTTP {}", response.status),
+            duration: elapsed_millis(started_at),
+            content_type: "application/json; charset=utf-8".to_string(),
+            body: response.body.clone(),
+            truncated: false,
+        });
+    }
+
+    let target = proxy::rewrite_target_url(&log.source, &rule, Some(&profile.apifox.mock_token))?;
+    let method = Method::from_bytes(log.method.as_bytes())
+        .map_err(|_| "Mock 请求方式无效，无法重新请求".to_string())?;
+    let started_at = Instant::now();
+    let response = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|error| format!("无法创建 Mock 请求：{error}"))?
+        .request(method, &target)
+        .send()
+        .await
+        .map_err(|error| format!("Mock 请求失败：{error}"))?;
+    let status = response.status();
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_string();
+    let body = response
+        .text()
+        .await
+        .map_err(|error| format!("无法读取 Mock 响应：{error}"))?;
+    let (body, truncated) = truncate_preview_body(body);
+    Ok(MockResponsePreview {
+        source: "remote".to_string(),
+        request_url: proxy::sanitize_url(&target),
+        status: status.as_u16(),
+        status_text: status.canonical_reason().unwrap_or("Unknown").to_string(),
+        duration: elapsed_millis(started_at),
+        content_type,
+        body,
+        truncated,
+    })
+}
+
+fn preview_context(
+    snapshot: &DesktopSnapshot,
+    log_id: &str,
+) -> Result<(RequestLog, ProjectProfile, ProxyRule), String> {
+    let log = snapshot
+        .logs
+        .iter()
+        .find(|item| item.id == log_id)
+        .cloned()
+        .ok_or_else(|| "请求记录已不存在".to_string())?;
+    if log.status != "matched" {
+        return Err("仅已 Mock 的请求可以查看响应".to_string());
+    }
+    let profile = snapshot
+        .profiles
+        .iter()
+        .find(|profile| profile.rules.iter().any(|rule| rule.id == log.rule_id))
+        .cloned()
+        .ok_or_else(|| "对应 Mock 接口已不存在".to_string())?;
+    let rule = profile
+        .rules
+        .iter()
+        .find(|rule| rule.id == log.rule_id)
+        .cloned()
+        .ok_or_else(|| "对应 Mock 接口已不存在".to_string())?;
+    Ok((log, profile, rule))
+}
+
+fn truncate_preview_body(body: String) -> (String, bool) {
+    const MAX_PREVIEW_BODY_BYTES: usize = 512 * 1024;
+    if body.len() <= MAX_PREVIEW_BODY_BYTES {
+        return (body, false);
+    }
+    let mut end = MAX_PREVIEW_BODY_BYTES;
+    while !body.is_char_boundary(end) {
+        end -= 1;
+    }
+    (body[..end].to_string(), true)
+}
+
+fn elapsed_millis(started_at: Instant) -> u64 {
+    u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+#[tauri::command]
 pub async fn start_proxy(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -913,11 +1027,11 @@ mod tests {
     use super::{
         build_custom_rule, build_profile, delete_rules_from_profile,
         inherit_apifox_from_first_profile, move_rules_between_profiles, normalize_host,
-        reset_profile_rules, resolve_token, scope_apifox_rules_to_profile,
+        preview_context, reset_profile_rules, resolve_token, scope_apifox_rules_to_profile,
     };
     use crate::model::{
         DesktopSnapshot, LocalMockResponse, MatchMode, ProfileInput, ProjectProfile, ProxyRule,
-        RuleInput, RuleSource,
+        RequestLog, RuleInput, RuleSource,
     };
 
     #[test]
@@ -1167,6 +1281,45 @@ mod tests {
 
         assert_eq!(result, Err("部分 Mock 接口不存在".to_string()));
         assert_eq!(profile.rules.len(), 2);
+    }
+
+    #[test]
+    fn preview_context_only_allows_matched_requests_with_a_current_rule() {
+        let mut profile = test_profile("profile");
+        profile.rules.push(test_rule("order", None));
+        let mut snapshot = DesktopSnapshot {
+            profiles: vec![profile],
+            ..DesktopSnapshot::default()
+        };
+        snapshot.logs.push(RequestLog {
+            id: "matched".to_string(),
+            created_at: "0".to_string(),
+            method: "GET".to_string(),
+            source: "https://api.example.test/order".to_string(),
+            destination: "https://mock.example.test/order".to_string(),
+            rule_id: "order".to_string(),
+            rule_name: "order".to_string(),
+            tag: String::new(),
+            status: "matched".to_string(),
+            stage: "rule".to_string(),
+            response_code: Some(200),
+            duration: 1,
+        });
+        snapshot.logs.push(RequestLog {
+            id: "passed".to_string(),
+            status: "passed".to_string(),
+            ..snapshot.logs[0].clone()
+        });
+
+        let (_, profile, rule) =
+            preview_context(&snapshot, "matched").expect("matched log should resolve");
+
+        assert_eq!(profile.id, "profile");
+        assert_eq!(rule.id, "order");
+        assert!(matches!(
+            preview_context(&snapshot, "passed"),
+            Err(message) if message == "仅已 Mock 的请求可以查看响应"
+        ));
     }
 
     fn test_profile(id: &str) -> ProjectProfile {

@@ -181,6 +181,19 @@ pub struct RequestLog {
     pub duration: u64,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MockResponsePreview {
+    pub source: String,
+    pub request_url: String,
+    pub status: u16,
+    pub status_text: String,
+    pub duration: u64,
+    pub content_type: String,
+    pub body: String,
+    pub truncated: bool,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileInput {

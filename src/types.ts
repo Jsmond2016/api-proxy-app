@@ -64,6 +64,17 @@ export interface RequestLog {
   duration: number;
 }
 
+export interface MockResponsePreview {
+  source: "local" | "remote";
+  requestUrl: string;
+  status: number;
+  statusText: string;
+  duration: number;
+  contentType: string;
+  body: string;
+  truncated: boolean;
+}
+
 export interface CertificateStatus {
   generated: boolean;
   trusted: boolean;

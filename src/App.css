@@ -791,8 +791,32 @@ h2 {
 }
 
 .response-payload pre {
-  max-height: 420px;
-  white-space: pre;
+  height: 320px;
+  min-height: 0;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  border: 1px solid #dce5db;
+  border-radius: 4px;
+  background: #f7faf6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.response-field-path {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 5px;
+  color: #718074;
+  font-size: 11px;
+}
+
+.response-field-path code {
+  overflow: hidden;
+  color: #345141;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .response-payload mark {
@@ -1453,7 +1477,7 @@ code {
 .preview-error { color: #ba5540; }
 
 .traffic-preview .response-payload {
-  grid-template-rows: auto 400px;
+  grid-template-rows: auto 400px auto;
   min-height: 0;
 }
 
@@ -1502,7 +1526,7 @@ code {
   }
 
   .traffic-preview .response-payload {
-    grid-template-rows: auto 320px;
+    grid-template-rows: auto 320px auto;
   }
 
   .traffic-preview .response-payload pre {

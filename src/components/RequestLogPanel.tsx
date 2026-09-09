@@ -1,8 +1,7 @@
 import { Alert, App as AntApp, Button, Descriptions, Drawer, Empty, Input, Select, Spin, Tooltip } from "antd";
-import type { InputRef } from "antd";
-import { ArrowRight, ChevronDown, ChevronUp, Eye, RefreshCw, Search, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import { ArrowRight, Eye, RefreshCw, Search, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ResponsePayloadViewer } from "./ResponsePayloadViewer";
 import type { MockResponsePreview, ProjectProfile, ProxyRule, RequestLog } from "../types";
 
 interface RequestLogPanelProps { logs: RequestLog[]; profiles: ProjectProfile[]; onClear: () => Promise<void>; onPreview: (logId: string) => Promise<MockResponsePreview> }
@@ -58,60 +57,15 @@ function PreviewContent(props: { preview: MockResponsePreview | null; previewing
 
 function PreviewResponseBody(props: { preview: MockResponsePreview }) {
   const { preview } = props;
-  const [responseSearch, setResponseSearch] = useState("");
-  const [responseMatchIndex, setResponseMatchIndex] = useState(0);
-  const responseSearchRef = useRef<InputRef>(null);
-  const responseContainerRef = useRef<HTMLPreElement>(null);
   const body = formatResponseBody(preview.body || "（空响应）");
-  const matchCount = countResponseMatches(body, responseSearch);
-  useEffect(() => {
-    setResponseSearch("");
-    setResponseMatchIndex(0);
-  }, [preview]);
-  useEffect(() => {
-    function focusSearch(event: globalThis.KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
-        event.preventDefault();
-        responseSearchRef.current?.focus();
-      }
-    }
-    window.addEventListener("keydown", focusSearch);
-    return () => window.removeEventListener("keydown", focusSearch);
-  }, []);
-  useEffect(() => {
-    if (!responseSearch.trim() || matchCount === 0) return;
-    const activeMatch = responseContainerRef.current?.querySelector("mark.active-match");
-    activeMatch?.scrollIntoView({ block: "center" });
-  }, [matchCount, responseMatchIndex, responseSearch]);
-  function updateResponseSearch(value: string) { setResponseSearch(value); setResponseMatchIndex(0); }
-  function moveResponseMatch(direction: 1 | -1) {
-    if (matchCount === 0) return;
-    setResponseMatchIndex((current) => {
-      const next = current + direction;
-      if (next < 0) return matchCount - 1;
-      if (next >= matchCount) return 0;
-      return next;
-    });
-  }
-  function handleKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
-    if (event.key !== "Enter") return;
-    event.preventDefault();
-    if (event.shiftKey) { moveResponseMatch(-1); return; }
-    moveResponseMatch(1);
-  }
   let statusClassName = "preview-error";
   if (preview.status >= 200 && preview.status < 300) statusClassName = "preview-success";
-  return <div className="traffic-preview"><div className="traffic-preview-meta"><span className={statusClassName}>{preview.status} {preview.statusText}</span><span>{preview.duration} ms</span>{preview.contentType && <span>{preview.contentType}</span>}</div>{preview.truncated && <Alert message="响应内容超过 512 KB，当前仅展示前半部分。" type="warning" showIcon />}<div className="response-payload"><div className="response-payload-heading"><strong>响应内容</strong><div className="response-search-tools"><Input ref={responseSearchRef} allowClear onChange={(event) => updateResponseSearch(event.target.value)} onKeyDown={handleKeyDown} placeholder="搜索响应内容（Ctrl/Cmd+F）" prefix={<Search size={14} />} value={responseSearch} /><span className="response-match-count">{responseMatchLabel(responseMatchIndex, matchCount)}</span><Tooltip title="上一个匹配"><Button aria-label="上一个匹配" disabled={matchCount === 0} icon={<ChevronUp size={15} />} onClick={() => moveResponseMatch(-1)} size="small" /></Tooltip><Tooltip title="下一个匹配"><Button aria-label="下一个匹配" disabled={matchCount === 0} icon={<ChevronDown size={15} />} onClick={() => moveResponseMatch(1)} size="small" /></Tooltip></div></div><pre ref={responseContainerRef}>{renderSearchableResponse(body, responseSearch, responseMatchIndex)}</pre></div></div>;
+  return <div className="traffic-preview"><div className="traffic-preview-meta"><span className={statusClassName}>{preview.status} {preview.statusText}</span><span>{preview.duration} ms</span>{preview.contentType && <span>{preview.contentType}</span>}</div>{preview.truncated && <Alert message="响应内容超过 512 KB，当前仅展示前半部分。" type="warning" showIcon />}<ResponsePayloadViewer body={body} /></div>;
 }
 
 function formatTime(value: string) { const numeric = Number(value); const date = new Date(value); if (!Number.isNaN(numeric)) return formatDate(new Date(numeric)); if (Number.isNaN(date.getTime())) return value; return formatDate(date); }
 function formatDate(date: Date) { const pad = (part: number) => String(part).padStart(2, "0"); return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`; }
 function formatResponseBody(body: string) { try { return JSON.stringify(JSON.parse(body), null, 2); } catch { return body; } }
-function renderSearchableResponse(body: string, query: string, activeMatchIndex: number) { if (!query.trim()) return body; const parts = body.split(new RegExp(`(${escapeRegExp(query)})`, "gi")); let matchIndex = 0; return parts.map((part, index) => { if (part.toLowerCase() === query.toLowerCase()) { const currentIndex = matchIndex; matchIndex += 1; return <mark className={matchClassName(currentIndex === activeMatchIndex)} key={`${part}-${index}-${currentIndex}`}>{part}</mark>; } return part; }); }
-function matchClassName(active: boolean) { if (active) return "active-match"; return undefined; }
-function responseMatchLabel(index: number, count: number) { if (count === 0) return "0 / 0"; return `${index + 1} / ${count}`; }
-function countResponseMatches(body: string, query: string) { if (!query.trim()) return 0; return Array.from(body.matchAll(new RegExp(escapeRegExp(query), "gi"))).length; }
-function escapeRegExp(value: string) { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 function logStreamClass(count: number) { if (count > 0) return "log-stream traffic-stream has-logs"; return "log-stream traffic-stream empty"; }
 function destination(log: RequestLog) { if (log.destination) return log.destination; return `未转发（${log.stage}）`; }
 function ruleName(log: RequestLog) { if (log.ruleName) return log.ruleName; return "未命中接口"; }

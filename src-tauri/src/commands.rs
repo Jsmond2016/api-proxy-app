@@ -12,9 +12,12 @@ use crate::apifox::{
 use crate::model::{
     ApifoxConnection, ApifoxMode, ApifoxPreview, ApifoxRequest, DesktopSnapshot, InterfacePreview,
     LocalMockResponse, LocalMockResponseInput, MatchMode, MockResponsePreview, OperationResolution,
-    ProfileInput, ProjectProfile, ProxyRule, RequestLog, ResolveOperationInput, ResolvedInterface,
-    RuleInput, RuleSource,
+    ProfileInput, ProjectPresetCreateInput, ProjectPresetExportInput, ProjectPresetPreview,
+    ProjectProfile, ProxyRule, RequestLog, ResolveOperationInput, ResolvedInterface, RuleInput,
+    RuleSource,
 };
+use crate::preset::{connection_from_preset, export_preset, read_preset};
+use crate::profile::validate_input;
 use crate::proxy;
 use crate::state::AppState;
 
@@ -45,6 +48,68 @@ pub async fn create_profile(
 }
 
 #[tauri::command]
+pub fn export_project_preset(
+    app: AppHandle,
+    input: ProjectPresetExportInput,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let profile = {
+        let current = lock_snapshot(&state)?;
+        current
+            .profiles
+            .iter()
+            .find(|profile| profile.id == input.profile_id)
+            .cloned()
+            .ok_or_else(|| "profile was not found".to_string())?
+    };
+    export_preset(&profile, &input, &app.package_info().version.to_string())
+}
+
+#[tauri::command]
+pub fn read_project_preset(path: String) -> Result<ProjectPresetPreview, String> {
+    read_preset(&path)
+}
+
+#[tauri::command]
+pub async fn create_profile_from_preset(
+    app: AppHandle,
+    input: ProjectPresetCreateInput,
+    state: State<'_, AppState>,
+) -> Result<DesktopSnapshot, String> {
+    let selected_tags = unique_non_empty(input.apifox.selected_tags.clone());
+    let profile_input = ProfileInput {
+        id: None,
+        name: input.name,
+        source_hosts: input.source_hosts,
+        path_prefix: input.path_prefix,
+        port: input.port,
+    };
+    let mut profile = build_profile(profile_input)?;
+    if input.apifox.mode != ApifoxMode::Online {
+        return Err("项目预设仅支持 Apifox 在线模式".to_string());
+    }
+    if !input.credentials.included
+        && (!input.credentials.access_token.trim().is_empty()
+            || !input.credentials.mock_token.trim().is_empty())
+    {
+        return Err("预设凭据标记无效".to_string());
+    }
+    profile.apifox = connection_from_preset(input.apifox, input.credentials);
+    profile.synced_tags = selected_tags.clone();
+    profile.active_tags = selected_tags;
+    {
+        let mut current = lock_snapshot(&state)?;
+        ensure_preset_port_available(&current, profile.port)?;
+        let mut next = current.clone();
+        next.active_profile_id = Some(profile.id.clone());
+        next.profiles.push(profile);
+        state.persist(&next)?;
+        *current = next;
+    }
+    proxy::ensure_proxy_running(&app, &state).await
+}
+
+#[tauri::command]
 pub async fn update_profile(
     app: AppHandle,
     input: ProfileInput,
@@ -54,7 +119,7 @@ pub async fn update_profile(
         .id
         .clone()
         .ok_or_else(|| "profile ID is required".to_string())?;
-    let validated = validate_profile_input(&input)?;
+    let validated = validate_input(&input)?;
     let (is_active, snapshot) = {
         let mut current = lock_snapshot(&state)?;
         let profile = current
@@ -689,7 +754,7 @@ pub fn stop_proxy(app: AppHandle, state: State<'_, AppState>) -> Result<DesktopS
 }
 
 fn build_profile(input: ProfileInput) -> Result<ProjectProfile, String> {
-    let (name, source_hosts, path_prefix) = validate_profile_input(&input)?;
+    let (name, source_hosts, path_prefix) = validate_input(&input)?;
     Ok(ProjectProfile {
         id: input.id.unwrap_or_else(|| create_id("profile")),
         name,
@@ -703,6 +768,16 @@ fn build_profile(input: ProfileInput) -> Result<ProjectProfile, String> {
         rules: Vec::new(),
         local_responses: Vec::new(),
     })
+}
+
+fn ensure_preset_port_available(snapshot: &DesktopSnapshot, port: u16) -> Result<(), String> {
+    if snapshot.profiles.iter().any(|profile| profile.port == port) {
+        return Err("该本地代理端口已被其他项目使用，请修改后重试".to_string());
+    }
+    let listener = std::net::TcpListener::bind(("127.0.0.1", port))
+        .map_err(|_| "该本地代理端口已被系统占用，请修改后重试".to_string())?;
+    drop(listener);
+    Ok(())
 }
 
 fn inherit_apifox_from_first_profile(
@@ -835,49 +910,6 @@ fn move_rules_between_profiles(
     let moved_count = moved_rules.len();
     target.rules.extend(moved_rules);
     Ok(moved_count)
-}
-
-fn validate_profile_input(input: &ProfileInput) -> Result<(String, Vec<String>, String), String> {
-    let name = input.name.trim().to_string();
-    if name.is_empty() {
-        return Err("Project name is required".to_string());
-    }
-    if input.port == 0 {
-        return Err("Proxy port must be between 1 and 65535".to_string());
-    }
-    let mut hosts = Vec::new();
-    for value in &input.source_hosts {
-        let host = normalize_host(value)?;
-        if !hosts.contains(&host) {
-            hosts.push(host);
-        }
-    }
-    if hosts.is_empty() {
-        return Err("At least one source host is required".to_string());
-    }
-    let path_prefix = input.path_prefix.trim().trim_end_matches('/').to_string();
-    if !path_prefix.is_empty() && !path_prefix.starts_with('/') {
-        return Err("Path prefix must start with /".to_string());
-    }
-    Ok((name, hosts, path_prefix))
-}
-
-fn normalize_host(value: &str) -> Result<String, String> {
-    let trimmed = value.trim().to_lowercase();
-    if trimmed.is_empty() {
-        return Err("Source host cannot be empty".to_string());
-    }
-    let candidate = if trimmed.contains("://") {
-        trimmed
-    } else {
-        format!("https://{trimmed}")
-    };
-    let parsed =
-        url::Url::parse(&candidate).map_err(|error| format!("Source host is invalid: {error}"))?;
-    parsed
-        .host_str()
-        .map(ToString::to_string)
-        .ok_or_else(|| "Source host is invalid".to_string())
 }
 
 fn build_custom_rule(input: &RuleInput) -> Result<ProxyRule, String> {
@@ -1049,14 +1081,15 @@ mod tests {
 
     use super::{
         build_custom_rule, build_profile, delete_rules_from_profile,
-        inherit_apifox_from_first_profile, move_rules_between_profiles, normalize_host,
-        preview_context, reset_profile_rules, resolve_token, scope_apifox_rules_to_profile,
+        inherit_apifox_from_first_profile, move_rules_between_profiles, preview_context,
+        reset_profile_rules, resolve_token, scope_apifox_rules_to_profile,
         set_all_rules_enabled_in_profile,
     };
     use crate::model::{
         DesktopSnapshot, LocalMockResponse, MatchMode, ProfileInput, ProjectProfile, ProxyRule,
         RequestLog, RuleInput, RuleSource,
     };
+    use crate::profile::normalize_host;
 
     #[test]
     fn normalizes_source_hosts() {

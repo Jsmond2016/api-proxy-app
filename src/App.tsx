@@ -186,7 +186,7 @@ function App() {
           execute={execute}
           appVersion={appVersion}
           proxyTransition={proxyTransition}
-          projectNavigation={{ activeProfileId: snapshot.activeProfileId, disabled: snapshot.proxyStatus === "starting" || proxyTransition, profiles: snapshot.profiles, onCreate: (input) => applyProxyTransition(desktop.createProfile(input), "创建项目"), onDelete: (id) => applyProxyTransition(desktop.deleteProfile(id), "删除项目"), onSelect: (id) => applyProxyTransition(desktop.setActiveProfile(id), "切换项目", false), onUpdate: (input) => applyProxyTransition(desktop.updateProfile(input), "更新项目") }}
+          projectNavigation={{ activeProfileId: snapshot.activeProfileId, disabled: snapshot.proxyStatus === "starting" || proxyTransition, profiles: snapshot.profiles, onCreate: (input) => applyProxyTransition(desktop.createProfile(input), "创建项目"), onCreateFromPreset: (input) => applyProxyTransition(desktop.createProfileFromPreset(input), "从预设创建项目"), onDelete: (id) => applyProxyTransition(desktop.deleteProfile(id), "删除项目"), onExportPreset: (input) => execute(desktop.exportProjectPreset(input), "导出项目预设"), onReadPreset: desktop.readProjectPreset, onSelect: (id) => applyProxyTransition(desktop.setActiveProfile(id), "切换项目", false), onUpdate: (input) => applyProxyTransition(desktop.updateProfile(input), "更新项目") }}
           validateApifox={validateApifox}
         />
         <DiagnosticPanel entries={diagnostics} onClear={() => setDiagnostics([])} snapshot={snapshot} />

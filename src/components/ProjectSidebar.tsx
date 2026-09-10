@@ -1,14 +1,18 @@
 import { Button, Form, Input, InputNumber, Modal, Tabs, Tooltip } from "antd";
 import { FolderPlus, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { ProfileInput, ProjectProfile } from "../types";
+import type { ProfileInput, ProjectPresetCreateInput, ProjectPresetExportInput, ProjectPresetPreview, ProjectProfile } from "../types";
+import { ProjectPresetPanel } from "./ProjectPresetPanel";
 
 interface ProjectSidebarProps {
   profiles: ProjectProfile[];
   activeProfileId: string | null;
   disabled: boolean;
   onCreate: (input: ProfileInput) => Promise<void>;
+  onCreateFromPreset: (input: ProjectPresetCreateInput) => Promise<void>;
   onDelete: (profileId: string) => Promise<void>;
+  onExportPreset: (input: ProjectPresetExportInput) => Promise<void>;
+  onReadPreset: (path: string) => Promise<ProjectPresetPreview>;
   onSelect: (profileId: string) => Promise<void>;
   onUpdate: (input: ProfileInput) => Promise<void>;
 }
@@ -52,6 +56,7 @@ export function ProjectSidebar(props: ProjectSidebarProps) {
       <div className="project-tabs-bar">
         <Tabs activeKey={props.activeProfileId || undefined} items={tabItems} onChange={(id) => { void props.onSelect(id); }} />
         <div className="project-tabs-actions">
+          <ProjectPresetPanel activeProfile={props.profiles.find((profile) => profile.id === props.activeProfileId) || null} disabled={props.disabled} onCreate={props.onCreateFromPreset} onExport={props.onExportPreset} onRead={props.onReadPreset} />
           <Tooltip title="新建项目"><Button aria-label="新建项目" className="icon-button" disabled={props.disabled} icon={<FolderPlus size={16} />} onClick={openCreate} type="text" /></Tooltip>
           <Tooltip title="编辑当前项目"><Button aria-label="编辑当前项目" className="icon-button" disabled={!props.activeProfileId || props.disabled} icon={<Pencil size={16} />} onClick={openEdit} type="text" /></Tooltip>
           <Tooltip title="删除当前项目"><Button aria-label="删除当前项目" className="icon-button danger-utility" danger disabled={!props.activeProfileId || props.disabled || props.profiles.length <= 1} icon={<Trash2 size={16} />} onClick={removeCurrent} type="text" /></Tooltip>

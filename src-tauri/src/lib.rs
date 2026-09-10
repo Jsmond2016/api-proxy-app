@@ -1,15 +1,18 @@
 mod apifox;
 mod commands;
 mod model;
+mod preset;
+mod profile;
 mod proxy;
 mod state;
 
 use commands::{
-    clear_logs, clear_rules, create_profile, delete_local_response, delete_profile, delete_rule,
-    delete_rules, generate_certificate, get_snapshot, move_rules, open_certificate,
-    preview_mock_response, refresh_certificate, resolve_apifox_operation, save_local_response,
-    save_rule, set_active_profile, set_all_rules_enabled, set_global_mock_enabled,
-    set_rule_enabled, start_proxy, stop_proxy, sync_apifox, update_profile, validate_apifox,
+    clear_logs, clear_rules, create_profile, create_profile_from_preset, delete_local_response,
+    delete_profile, delete_rule, delete_rules, export_project_preset, generate_certificate,
+    get_snapshot, move_rules, open_certificate, preview_mock_response, read_project_preset,
+    refresh_certificate, resolve_apifox_operation, save_local_response, save_rule,
+    set_active_profile, set_all_rules_enabled, set_global_mock_enabled, set_rule_enabled,
+    start_proxy, stop_proxy, sync_apifox, update_profile, validate_apifox,
 };
 use state::AppState;
 use tauri::{Emitter, Manager};
@@ -38,9 +41,11 @@ pub fn run() {
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             get_snapshot,
             create_profile,
+            create_profile_from_preset,
             update_profile,
             delete_profile,
             set_active_profile,
@@ -63,7 +68,9 @@ pub fn run() {
             sync_apifox,
             resolve_apifox_operation,
             clear_logs,
-            preview_mock_response
+            preview_mock_response,
+            export_project_preset,
+            read_project_preset
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Apifox Proxy desktop application");

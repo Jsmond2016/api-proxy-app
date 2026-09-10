@@ -91,7 +91,7 @@ impl Default for ApifoxConnection {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum ApifoxMode {
     Online,
@@ -202,6 +202,80 @@ pub struct ProfileInput {
     pub source_hosts: Vec<String>,
     pub path_prefix: String,
     pub port: u16,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectPresetExportInput {
+    pub profile_id: String,
+    pub path: String,
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub include_credentials: bool,
+    pub exported_at: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectPresetCreateInput {
+    pub name: String,
+    pub source_hosts: Vec<String>,
+    pub path_prefix: String,
+    pub port: u16,
+    pub apifox: ProjectPresetApifox,
+    #[serde(default)]
+    pub credentials: ProjectPresetCredentials,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectPresetPreview {
+    pub metadata: ProjectPresetMetadata,
+    pub project: ProjectPresetProject,
+    pub credentials_included: bool,
+    pub credentials: ProjectPresetCredentials,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectPresetMetadata {
+    pub name: String,
+    pub description: String,
+    pub exported_at: String,
+    pub exported_by_app_version: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectPresetProject {
+    pub suggested_name: String,
+    pub source_hosts: Vec<String>,
+    pub path_prefix: String,
+    pub suggested_port: u16,
+    pub apifox: ProjectPresetApifox,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectPresetApifox {
+    pub mode: ApifoxMode,
+    pub project_id: String,
+    pub mock_prefix: String,
+    #[serde(default)]
+    pub selected_tags: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectPresetCredentials {
+    #[serde(default)]
+    pub included: bool,
+    #[serde(default)]
+    pub access_token: String,
+    #[serde(default)]
+    pub mock_token: String,
 }
 
 #[derive(Deserialize)]

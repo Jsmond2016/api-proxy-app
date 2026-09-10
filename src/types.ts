@@ -99,6 +99,55 @@ export interface ProfileInput {
   port: number;
 }
 
+export interface ProjectPresetExportInput {
+  profileId: string;
+  path: string;
+  name: string;
+  description: string;
+  includeCredentials: boolean;
+  exportedAt: string;
+}
+
+export interface ProjectPresetApifox {
+  mode: ApifoxMode;
+  projectId: string;
+  mockPrefix: string;
+  selectedTags: string[];
+}
+
+export interface ProjectPresetCredentials {
+  included: boolean;
+  accessToken: string;
+  mockToken: string;
+}
+
+export interface ProjectPresetCreateInput {
+  name: string;
+  sourceHosts: string[];
+  pathPrefix: string;
+  port: number;
+  apifox: ProjectPresetApifox;
+  credentials: ProjectPresetCredentials;
+}
+
+export interface ProjectPresetPreview {
+  metadata: {
+    name: string;
+    description: string;
+    exportedAt: string;
+    exportedByAppVersion: string;
+  };
+  project: {
+    suggestedName: string;
+    sourceHosts: string[];
+    pathPrefix: string;
+    suggestedPort: number;
+    apifox: ProjectPresetApifox;
+  };
+  credentialsIncluded: boolean;
+  credentials: ProjectPresetCredentials;
+}
+
 export interface ApifoxRequest {
   profileId: string;
   mode: ApifoxMode;

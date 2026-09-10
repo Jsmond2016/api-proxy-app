@@ -110,6 +110,10 @@ button {
 .project-tab-label { display: inline-flex; align-items: center; gap: 8px; }
 .project-tab-label small { color: #8fb49b; font-size: 11px; }
 .project-tabs-actions { display: flex; align-items: center; gap: 4px; }
+.project-tabs-actions > .ant-btn { white-space: nowrap; }
+.preset-credential-alert { margin-top: 14px; }
+.preset-description { display: block; margin-top: 4px; color: #64736a; }
+.preset-credentials { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
 .header-brand { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; line-height: 1; }
 .header-brand .brand-mark { width: 28px; height: 28px; border-color: #8bbca0; color: #e4f1e6; font-size: 17px; }

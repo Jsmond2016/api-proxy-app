@@ -13,6 +13,9 @@ import type {
   RuleInput,
   LocalMockResponseInput,
   MockResponsePreview,
+  ProjectPresetCreateInput,
+  ProjectPresetExportInput,
+  ProjectPresetPreview,
 } from "../types";
 
 export function isDesktopRuntime() {
@@ -45,6 +48,24 @@ export async function getDesktopSnapshot() {
 
 export async function createProfile(input: ProfileInput) {
   return invokeDesktop("create_profile", { input });
+}
+
+export async function exportProjectPreset(input: ProjectPresetExportInput) {
+  if (!isDesktopRuntime()) {
+    return desktopRequired();
+  }
+  return invoke<void>("export_project_preset", { input });
+}
+
+export async function readProjectPreset(path: string) {
+  if (!isDesktopRuntime()) {
+    return desktopRequired();
+  }
+  return invoke<ProjectPresetPreview>("read_project_preset", { path });
+}
+
+export async function createProfileFromPreset(input: ProjectPresetCreateInput) {
+  return invokeDesktop("create_profile_from_preset", { input });
 }
 
 export async function updateProfile(input: ProfileInput) {

@@ -1,0 +1,154 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to retry
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.release.outputs.should_release }}
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+      commit: ${{ steps.release.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "push" ] && [ "$REF_TYPE" = "branch" ]; then
+            if git diff --quiet "$SHA^" "$SHA" -- package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock; then
+              echo "should_release=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            commit="$SHA"
+            tag=""
+          else
+            tag="$REF_NAME"
+            if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+              tag="$INPUT_TAG"
+            fi
+            git show-ref --verify --quiet "refs/tags/$tag"
+            commit="$(git rev-list -n 1 "$tag")"
+            git checkout --detach "$commit"
+            git merge-base --is-ancestor "$commit" origin/main
+          fi
+
+          if [ -n "$tag" ]; then
+            node scripts/verify-release-version.mjs --tag "$tag" --github-output >> "$GITHUB_OUTPUT"
+          else
+            node scripts/verify-release-version.mjs --github-output >> "$GITHUB_OUTPUT"
+            tag="v$(node -p "require('./package.json').version")"
+          fi
+
+          previous_tag="$(git tag --list 'v*' --sort=-version:refname | grep -Fvx "$tag" | head -n 1 || true)"
+          if [ -n "$previous_tag" ]; then
+            node scripts/verify-release-version.mjs --greater-than "${previous_tag#v}"
+          fi
+
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            tag_commit="$(git rev-list -n 1 "$tag")"
+            if [ "$tag_commit" != "$commit" ]; then
+              echo "Tag $tag does not point to the version commit." >&2
+              exit 1
+            fi
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$tag" "$commit" -m "Release $tag"
+            git push origin "$tag"
+          fi
+
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          node scripts/verify-release-version.mjs --github-output >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: prepare
+    if: needs.prepare.outputs.should_release == 'true'
+    runs-on: macos-14
+    environment: release
+    concurrency:
+      group: release-${{ needs.prepare.outputs.tag }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm run check:source
+      - run: pnpm docs:build
+      - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
+      - run: test "$(uname -m)" = arm64
+      - run: pnpm package:mac
+      - id: assets
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          name="Apifox-Proxy_${VERSION}_aarch64.dmg"
+          source="src-tauri/target/release/bundle/dmg/Apifox Proxy_${VERSION}_aarch64.dmg"
+          mkdir release-assets
+          mv "$source" "release-assets/$name"
+          hdiutil verify "release-assets/$name"
+          cd release-assets
+          shasum -a 256 "$name" > "$name.sha256"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ needs.prepare.outputs.tag }}-macos-aarch64
+          path: release-assets/
+          retention-days: 14
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+          ASSET_NAME: ${{ steps.assets.outputs.name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            exit 0
+          fi
+          cat > release-notes.md <<EOF
+          ## 下载
+
+          - [macOS Apple Silicon DMG](https://github.com/$REPOSITORY/releases/download/$TAG/$ASSET_NAME)
+          - [SHA-256 校验文件](https://github.com/$REPOSITORY/releases/download/$TAG/$ASSET_NAME.sha256)
+
+          仅支持 Apple Silicon Mac。当前为 ad-hoc 签名包，首次打开时 macOS 可能要求在系统设置中手动允许。下载后可执行：\`shasum -a 256 -c $ASSET_NAME.sha256\`。
+          EOF
+          args=("$TAG" "release-assets/$ASSET_NAME" "release-assets/$ASSET_NAME.sha256" --title "Apifox Proxy v$VERSION" --generate-notes --notes-file release-notes.md)
+          if [ "$PRERELEASE" = "true" ]; then
+            args+=(--prerelease)
+          fi
+          gh release create "${args[@]}"

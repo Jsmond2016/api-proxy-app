@@ -82,6 +82,18 @@ src-tauri/target/release/bundle/macos/Apifox Proxy.app
 src-tauri/target/release/bundle/dmg/Apifox Proxy_<version>_aarch64.dmg
 ```
 
+## 发布与下载
+
+面向用户的安装包和版本变更记录发布在 [GitHub Releases](https://github.com/Jsmond2016/api-proxy-app/releases)。首期仅提供 Apple Silicon Mac 的 DMG；当前为 ad-hoc 签名包，首次打开时 macOS 可能要求在系统设置中手动允许。
+
+下载 Release Assets 后可校验文件完整性：
+
+```bash
+shasum -a 256 -c Apifox-Proxy_<version>_aarch64.dmg.sha256
+```
+
+维护稳定版本时执行 `pnpm version:stable [major|minor|patch]`；预览版本使用 `pnpm version:preview beta|rc [major|minor|patch]`。审查并提交版本文件后，执行 `pnpm version:tag` 创建匹配的本地注释 tag，再推送提交和 tag。仅推送版本提交到 `main` 时，GitHub Actions 也会自动创建对应 tag 并发布。
+
 详细配置、微信开发者工具接入和验收步骤见 [使用与验收文档](specs/需求-main/main-使用与验收文档.md)。问题审查和完整方案见 [需求文档](specs/需求-main/main-需求文档.md) 与 [技术方案](specs/需求-main/main-技术方案文档.md)。
 
 ## 交付边界

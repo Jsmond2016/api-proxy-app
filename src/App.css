@@ -163,6 +163,36 @@ button {
   overflow: auto;
 }
 
+.app-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 22px;
+  color: #718074;
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.app-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #496858;
+  text-decoration: none;
+}
+
+.app-footer a:hover {
+  color: #1f5b43;
+  text-decoration: underline;
+}
+
+.app-footer-divider {
+  color: #b3c0b4;
+}
+
 .proxy-header {
   display: flex;
   align-items: flex-end;

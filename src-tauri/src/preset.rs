@@ -153,7 +153,7 @@ mod tests {
     fn profile() -> ProjectProfile {
         ProjectProfile {
             id: "profile-1".to_string(),
-            name: "会员测试".to_string(),
+            name: "示例测试".to_string(),
             source_hosts: vec!["api.example.test".to_string()],
             path_prefix: "/api".to_string(),
             port: 8899,
@@ -165,8 +165,8 @@ mod tests {
                 access_token: "access-token".to_string(),
                 mock_token: "mock-token".to_string(),
             },
-            synced_tags: vec!["会员".to_string()],
-            active_tags: vec!["会员".to_string()],
+            synced_tags: vec!["示例接口".to_string()],
+            active_tags: vec!["示例接口".to_string()],
             global_mock_enabled: true,
             rules: Vec::new(),
             local_responses: Vec::new(),
@@ -213,7 +213,7 @@ mod tests {
         .expect("export preset");
         let preview = read_preset(&path.to_string_lossy()).expect("read preset");
         assert!(preview.credentials_included);
-        assert_eq!(preview.project.apifox.selected_tags, ["会员"]);
+        assert_eq!(preview.project.apifox.selected_tags, ["示例接口"]);
         let _ = std::fs::remove_file(temp_preset_path("with-credentials"));
     }
 

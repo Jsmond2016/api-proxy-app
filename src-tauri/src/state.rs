@@ -347,11 +347,24 @@ fn migrate_legacy_snapshot(serialized: &str) -> Option<DesktopSnapshot> {
 
 fn is_untouched_demo(snapshot: &LegacySnapshot) -> bool {
     snapshot.profiles.iter().all(|profile| {
-        let known_id = profile.id == "wx-retail" || profile.id == "wx-member";
-        let known_source = profile.apifox.source == "Project #981245"
+        let known_id = is_legacy_demo_profile_id(&profile.id);
+        let known_source = profile.apifox.source.starts_with("Project #")
             || profile.apifox.source == "http://127.0.0.1:4523/export/openapi.json";
         known_id && known_source
     })
+}
+
+fn is_legacy_demo_profile_id(profile_id: &str) -> bool {
+    let digest = Sha256::digest(profile_id.as_bytes());
+    is_legacy_demo_profile_digest(&format!("{digest:x}"))
+}
+
+fn is_legacy_demo_profile_digest(digest: &str) -> bool {
+    const LEGACY_DEMO_PROFILE_ID_DIGESTS: [&str; 2] = [
+        "1a6a9643d0416a3ac7282e5ccc3c14e446f3b876f2facfdd6edb9fb21a9d647b",
+        "523a9913dbfef1606354cff063039d0ef40c07be02d7a4bfcb7eaf600fe55d48",
+    ];
+    LEGACY_DEMO_PROFILE_ID_DIGESTS.contains(&digest)
 }
 
 fn migrate_legacy_profile(profile: LegacyProfile) -> ProjectProfile {
@@ -415,7 +428,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use super::{AppState, DesktopSnapshot, ProxyRuntime};
+    use super::{is_legacy_demo_profile_digest, AppState, DesktopSnapshot, ProxyRuntime};
     use crate::model::{ApifoxConnection, ProjectProfile};
     use tokio::sync::oneshot;
 
@@ -436,6 +449,17 @@ mod tests {
         assert!(snapshot.logs.is_empty());
         drop(snapshot);
         fs::remove_dir_all(directory).expect("temporary state should be removed");
+    }
+
+    #[test]
+    fn recognizes_historical_demo_profile_digests_without_exposing_names() {
+        assert!(is_legacy_demo_profile_digest(
+            "1a6a9643d0416a3ac7282e5ccc3c14e446f3b876f2facfdd6edb9fb21a9d647b"
+        ));
+        assert!(is_legacy_demo_profile_digest(
+            "523a9913dbfef1606354cff063039d0ef40c07be02d7a4bfcb7eaf600fe55d48"
+        ));
+        assert!(!is_legacy_demo_profile_digest("not-a-known-demo"));
     }
 
     #[test]

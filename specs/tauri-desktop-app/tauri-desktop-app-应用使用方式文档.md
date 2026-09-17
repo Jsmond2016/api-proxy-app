@@ -37,7 +37,7 @@
 | 项目 ID | Apifox 项目的唯一标识。仅填写项目名称通常不足以定位项目；当前版本将其作为项目配置标识，实际同步仍使用 OpenAPI 导出地址。 |
 | 项目 Token | 用于访问项目 OpenAPI 导出数据的访问令牌。 |
 | OpenAPI 导出地址 | Apifox 项目对应的 OpenAPI JSON 导出地址。 |
-| Mock 地址前缀 | Apifox Mock 服务的基础地址，例如 `https://m1.apifoxmock.com/m1/981245-0-default`。 |
+| Mock 地址前缀 | Mock 服务的基础地址，例如 `https://mock.example.test/<PROJECT_ID>`。 |
 
 Token 只用于当前同步请求，不应写入请求日志、规则目标地址或配置导出文件。后续版本应使用 macOS Keychain 保存 Token。
 
@@ -71,24 +71,24 @@ HTTPS 请求需要本地代理终止 TLS 并重新建立连接，因此必须：
 
 | 配置项 | 示例 | 作用 |
 | --- | --- | --- |
-| 项目名称 | 零售小程序 | 在应用中区分不同联调项目。 |
-| 源请求域名 | `api.dev.acme.test` | 限制只处理指定后端域名的请求。 |
+| 项目名称 | 示例应用 | 在应用中区分不同联调项目。 |
+| 源请求域名 | `api.example.test` | 限制只处理指定后端域名的请求。 |
 | 拦截路径前缀 | `/v1` | 限制只处理指定 API 路径前缀。 |
 | 代理端口 | `8899` | 本地代理监听端口。 |
-| Mock 地址前缀 | `https://m1.apifoxmock.com/m1/981245-0-default` | 命中后拼接为实际 Mock 目标地址。 |
+| Mock 地址前缀 | `https://mock.example.test/<PROJECT_ID>` | 命中后拼接为实际 Mock 目标地址。 |
 
-例如，配置源域名 `api.dev.acme.test`、拦截前缀 `/v1` 后，以下请求满足全局拦截范围：
+例如，配置源域名 `api.example.test`、拦截前缀 `/v1` 后，以下请求满足全局拦截范围：
 
 ```text
-https://api.dev.acme.test/v1/products
-https://api.dev.acme.test/v1/orders?page=1
+https://api.example.test/v1/products
+https://api.example.test/v1/orders?page=1
 ```
 
 以下请求不满足该拦截范围：
 
 ```text
-https://api.dev.acme.test/health
-https://other.dev.acme.test/v1/products
+https://api.example.test/health
+https://other.example.test/v1/products
 ```
 
 ## 4. 同步 Apifox 接口
@@ -123,19 +123,19 @@ GET /v1/products
 生成的 Mock 目标：
 
 ```text
-https://m1.apifoxmock.com/m1/981245-0-default/v1/products
+https://mock.example.test/<PROJECT_ID>/v1/products
 ```
 
 如果原始请求包含查询参数：
 
 ```text
-https://api.dev.acme.test/v1/products?page=1
+https://api.example.test/v1/products?page=1
 ```
 
 转发目标应保留查询参数：
 
 ```text
-https://m1.apifoxmock.com/m1/981245-0-default/v1/products?page=1
+https://mock.example.test/<PROJECT_ID>/v1/products?page=1
 ```
 
 请求的 Method、Body 和必要请求头也应保持原始语义。
@@ -153,14 +153,14 @@ https://m1.apifoxmock.com/m1/981245-0-default/v1/products?page=1
 例如：
 
 ```text
-源域名：api.dev.acme.test
+源域名：api.example.test
 路径前缀：/v1
 ```
 
 则所有符合以下条件的请求都进入规则匹配：
 
 ```text
-请求域名等于 api.dev.acme.test
+请求域名等于 api.example.test
 请求路径以 /v1 开头
 ```
 
@@ -185,10 +185,10 @@ exact > regex > contains
 
 ```text
 原始请求：
-GET https://api.dev.acme.test/v1/products?page=1
+GET https://api.example.test/v1/products?page=1
 
 Mock 请求：
-GET https://m1.apifoxmock.com/m1/981245-0-default/v1/products?page=1
+GET https://mock.example.test/<PROJECT_ID>/v1/products?page=1
 ```
 
 转发过程中应保留：
@@ -234,7 +234,7 @@ GET https://m1.apifoxmock.com/m1/981245-0-default/v1/products?page=1
 ```bash
 curl --proxy http://127.0.0.1:8899 \
   --cacert ./apifox-proxy-ca.pem \
-  "https://api.dev.acme.test/v1/products?page=1"
+  "https://api.example.test/v1/products?page=1"
 ```
 
 实际证书路径以应用展示路径为准。验证前需要确保测试域名和 Mock 服务可访问。

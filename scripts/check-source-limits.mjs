@@ -14,7 +14,7 @@ function collectSourceFiles(directory) {
     const fullPath = path.join(directory, entry.name);
 
     if (entry.isDirectory()) {
-      if (!ignoredDirectories.has(entry.name)) {
+      if (!isIgnoredDirectory(fullPath, entry.name)) {
         collectSourceFiles(fullPath);
       }
       continue;
@@ -24,6 +24,12 @@ function collectSourceFiles(directory) {
       inspectSourceFile(fullPath);
     }
   }
+}
+
+function isIgnoredDirectory(directoryPath, directoryName) {
+  if (ignoredDirectories.has(directoryName)) return true;
+  const relativePath = path.relative(projectRoot, directoryPath);
+  return relativePath === "docs-site/.vitepress/cache" || relativePath === "docs-site/.vitepress/dist";
 }
 
 function inspectSourceFile(filePath) {

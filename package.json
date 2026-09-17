@@ -10,7 +10,11 @@
     "package:mac": "node scripts/package-mac.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
-    "check:source": "node scripts/check-source-limits.mjs"
+    "check:source": "node scripts/check-source-limits.mjs && node scripts/check-privacy.mjs",
+    "check:privacy": "node scripts/check-privacy.mjs",
+    "docs:dev": "vitepress dev docs-site",
+    "docs:build": "pnpm run check:privacy && vitepress build docs-site",
+    "docs:preview": "vitepress preview docs-site"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -28,7 +32,8 @@
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitepress": "^1.6.4"
   },
   "packageManager": "pnpm@10.23.0+sha512.21c4e5698002ade97e4efe8b8b4a89a8de3c85a37919f957e7a0f30f38fbc5bbdd05980ffe29179b2fb6e6e691242e098d945d1601772cad0fef5fb6411e2a4b"
 }

@@ -9,6 +9,7 @@ import { DiagnosticPanel } from "./components/DiagnosticPanel";
 import { ProjectSidebar } from "./components/ProjectSidebar";
 import { ProxyHeader } from "./components/ProxyHeader";
 import { RequestLogPanel } from "./components/RequestLogPanel";
+import { AppFooter } from "./components/AppFooter";
 import { RuleTable } from "./components/RuleTable";
 import { LocalMockPanel } from "./components/LocalMockPanel";
 import * as desktop from "./lib/desktop";
@@ -190,6 +191,7 @@ function App() {
           validateApifox={validateApifox}
         />
         <DiagnosticPanel entries={diagnostics} onClear={() => setDiagnostics([])} snapshot={snapshot} />
+        <AppFooter version={appVersion} />
       </section>
       <Modal cancelText="继续使用" okButtonProps={{ danger: true }} okText="确认关闭" onCancel={() => setCloseConfirmOpen(false)} onOk={() => { void confirmClose(); }} open={closeConfirmOpen} title="关闭 Apifox Proxy？">
         <p>关闭前请先将微信开发者工具的代理设置还原，否则关闭本应用后请求可能继续指向已停止的代理。</p>

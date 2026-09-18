@@ -88,6 +88,7 @@ Rust Application Services
 | R58 | 新增 `delete_rules` Tauri 命令，在当前 Profile 内去重校验选中的 rule ID，校验通过后一次性删除并持久化；`RuleTable` 将右上角重置入口替换为带 `Popconfirm` 的“批量删除”，无选中项禁用，成功后清空选择；保留既有单条删除和后端 `clear_rules` 兼容能力 | `commands.rs`、`lib.rs`、`desktop.ts`、`App.tsx`、`RuleTable.tsx`、测试和绑定文档 | GPT-5 Codex | Rust 编译/测试、批量删除调用链源码检查、前端构建、源码约束和差异检查 | 已确认 |
 | R59 | 代理生命周期以异步锁串行启动、重启和活动项目切换；停止时等待旧代理任务确认退出，运行实例使用单调 ID，异步退出仅清理自身 runtime；前端在代理切换期间禁用 Tab 和全局/单接口 Mock 开关，避免并发命令 | `state.rs`、`proxy/mod.rs`、`App.tsx`、`ProjectSidebar.tsx`、`RuleTable.tsx`、测试 | GPT-5 Codex | 运行实例身份隔离单测、Rust HTTP/HTTPS E2E、前端构建、源码约束、格式与差异检查 | 已确认 |
 | R60 | 已 Mock 且对应规则仍存在的请求记录行末提供查看入口；弹窗仅以标签和值展示命中规则的接口 URL、名称、Mock URL、本地预设、请求方式、匹配方式、Tags、优先级、开关和 Apifox Web 链接，不提供编辑或测试操作 | `App.tsx`、`RequestLogPanel.tsx`、`App.css` | GPT-5 Codex | 前端构建、查看入口状态与只读内容源码检查、差异检查 | 已确认 |
+| R61 | 执行既有 `pnpm version:stable` 将四处版本从 `0.1.60-beta.2` 同步为 `0.1.60`；提交并推送至 `main` 后复用既有 Release workflow 自动创建正式 Tag、GitHub Release 和 Apple Silicon Assets | 四处版本文件、绑定文档；不修改应用代码或 workflow | GPT-5 Codex | 版本一致性检查、前端/文档/隐私检查、Rust 测试、远端 Release API 核验 | 已实现，待远端验证 |
 | R12 | 建立 Rust 单元/集成、前端测试和本地双 upstream E2E；更新 README/使用文档；构建并校验 arm64 app/dmg | tests、scripts、docs、Tauri bundle | GPT-5 Codex | `pnpm build`、`check:source`、`cargo test`、E2E、codesign、hdiutil | 已确认 |
 
 ## 数据模型设计
@@ -364,6 +365,8 @@ Content-Type: application/json
 
 | 日期 | 代码或方案变更 | 关联需求 | 使用模型 | 影响 |
 | --- | --- | --- | --- | --- |
+| 2026-09-18 | 新增正式 GitHub Release 方案 | R61 | GPT-5 Codex | 复用既有版本命令与 Release workflow；仅晋升版本元数据，不修改发布实现 |
+| 2026-09-18 | 晋升 `0.1.60` 正式版本 | R61 | GPT-5 Codex | 四处版本元数据已同步；等待经 CR 确认后提交、推送并触发远端发布 |
 | 2026-08-27 | 创建 `main` 分支技术方案，完成参考项目与当前实现差距分析、架构设计、迁移和验证规划 | R1-R12 | GPT-5 Codex | 建立后续完整修复的权威方案；尚未修改实现 |
 | 2026-08-27 | 用户通过 `ac` 确认 R1-R12 | R1-R12 | GPT-5 Codex | 开始按五个增量实施 |
 | 2026-08-27 | 完成 schema v2、演示数据迁移、Profile CRUD、Keychain、Apifox 在线/本地同步、Tag diff/激活和规则管理 | R1-R6、R11 | GPT-5 Codex | 配置与同步工作流改为真实数据闭环 |
@@ -446,6 +449,8 @@ Content-Type: application/json
 - 明确边界：仅支持在线 Apifox 模式；不自动修改微信开发者工具或 macOS 系统代理；不绕过证书固定；真实微信开发者工具和真实 Apifox 账号仍需用户按使用与验收文档人工验收。
 
 ## 验证结果
+
+- 2026-09-18：R61 本地验证通过：`pnpm version:check`、`pnpm build`、`pnpm run check:source`、`pnpm docs:build`、`cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` 和 `cargo test --manifest-path src-tauri/Cargo.toml` 均成功；Rust 测试为 40 passed。远端 Tag、Release 与 Assets 在提交推送后核验。
 
 | 日期 | 验证项 | 结果 | 说明 |
 | --- | --- | --- | --- |

@@ -13,7 +13,13 @@ import { AppFooter } from "./components/AppFooter";
 import { RuleTable } from "./components/RuleTable";
 import { LocalMockPanel } from "./components/LocalMockPanel";
 import * as desktop from "./lib/desktop";
-import type { ApifoxRequest, DesktopSnapshot, DiagnosticEntry, RequestLog, RuleInput } from "./types";
+import type {
+  ApifoxRequest,
+  DesktopSnapshot,
+  DiagnosticEntry,
+  RequestLog,
+  RuleInput,
+} from "./types";
 import "./App.css";
 
 function App() {
@@ -32,7 +38,15 @@ function App() {
     let unsubscribe: () => void = () => undefined;
     void loadSnapshot();
     void desktop.getAppVersion().then(setAppVersion);
-    void desktop.subscribeProxyEvents(setSnapshot, mergeRequestLog).then((stop) => { unsubscribe = stop; }).catch((reason) => { showError(reason); recordDiagnostic("error", "事件订阅", errorMessage(reason)); });
+    void desktop
+      .subscribeProxyEvents(setSnapshot, mergeRequestLog)
+      .then((stop) => {
+        unsubscribe = stop;
+      })
+      .catch((reason) => {
+        showError(reason);
+        recordDiagnostic("error", "事件订阅", errorMessage(reason));
+      });
     return () => unsubscribe();
   }, []);
 
@@ -132,7 +146,11 @@ function App() {
     }
   }
 
-  async function applyProxyTransition(action: Promise<DesktopSnapshot>, label: string, notifySuccess = true) {
+  async function applyProxyTransition(
+    action: Promise<DesktopSnapshot>,
+    label: string,
+    notifySuccess = true,
+  ) {
     setProxyTransition(true);
     try {
       await apply(action, label, notifySuccess);
@@ -146,8 +164,16 @@ function App() {
     recordDiagnostic("info", "Apifox 连接/接口解析", "请求已开始");
     try {
       const preview = await desktop.validateApifox(request);
-      recordDiagnostic("success", "Apifox 连接/接口解析", `成功：${preview.selectedOperationCount} 个接口，${preview.availableTags.length} 个 Tag`);
-      notify("success", "Apifox 连接成功", `发现 ${preview.availableTags.length} 个 Tag、${preview.operationCount} 个接口`);
+      recordDiagnostic(
+        "success",
+        "Apifox 连接/接口解析",
+        `成功：${preview.selectedOperationCount} 个接口，${preview.availableTags.length} 个 Tag`,
+      );
+      notify(
+        "success",
+        "Apifox 连接成功",
+        `发现 ${preview.availableTags.length} 个 Tag、${preview.operationCount} 个接口`,
+      );
       return preview;
     } catch (reason) {
       showError(reason);
@@ -172,7 +198,8 @@ function App() {
     }
   }
 
-  if (!snapshot) return <InitializationState busy={initializing} error={error} onRetry={loadSnapshot} />;
+  if (!snapshot)
+    return <InitializationState busy={initializing} error={error} onRetry={loadSnapshot} />;
 
   return (
     <main className="app-shell">
@@ -187,32 +214,88 @@ function App() {
           execute={execute}
           appVersion={appVersion}
           proxyTransition={proxyTransition}
-          projectNavigation={{ activeProfileId: snapshot.activeProfileId, disabled: snapshot.proxyStatus === "starting" || proxyTransition, profiles: snapshot.profiles, onCreate: (input) => applyProxyTransition(desktop.createProfile(input), "创建项目"), onCreateFromPreset: (input) => applyProxyTransition(desktop.createProfileFromPreset(input), "从预设创建项目"), onDelete: (id) => applyProxyTransition(desktop.deleteProfile(id), "删除项目"), onExportPreset: (input) => execute(desktop.exportProjectPreset(input), "导出项目预设"), onReadPreset: desktop.readProjectPreset, onSelect: (id) => applyProxyTransition(desktop.setActiveProfile(id), "切换项目", false), onUpdate: (input) => applyProxyTransition(desktop.updateProfile(input), "更新项目") }}
+          projectNavigation={{
+            activeProfileId: snapshot.activeProfileId,
+            disabled: snapshot.proxyStatus === "starting" || proxyTransition,
+            profiles: snapshot.profiles,
+            onCreate: (input) => applyProxyTransition(desktop.createProfile(input), "创建项目"),
+            onCreateFromPreset: (input) =>
+              applyProxyTransition(desktop.createProfileFromPreset(input), "从预设创建项目"),
+            onDelete: (id) => applyProxyTransition(desktop.deleteProfile(id), "删除项目"),
+            onExportPreset: (input) => execute(desktop.exportProjectPreset(input), "导出项目预设"),
+            onReadPreset: desktop.readProjectPreset,
+            onSelect: (id) => applyProxyTransition(desktop.setActiveProfile(id), "切换项目", false),
+            onUpdate: (input) => applyProxyTransition(desktop.updateProfile(input), "更新项目"),
+          }}
           validateApifox={validateApifox}
         />
-        <DiagnosticPanel entries={diagnostics} onClear={() => setDiagnostics([])} snapshot={snapshot} />
+        <DiagnosticPanel
+          entries={diagnostics}
+          onClear={() => setDiagnostics([])}
+          snapshot={snapshot}
+        />
         <AppFooter version={appVersion} />
       </section>
-      <Modal cancelText="继续使用" okButtonProps={{ danger: true }} okText="确认关闭" onCancel={() => setCloseConfirmOpen(false)} onOk={() => { void confirmClose(); }} open={closeConfirmOpen} title="关闭 Apifox Proxy？">
-        <p>关闭前请先将微信开发者工具的代理设置还原，否则关闭本应用后请求可能继续指向已停止的代理。</p>
+      <Modal
+        cancelText="继续使用"
+        okButtonProps={{ danger: true }}
+        okText="确认关闭"
+        onCancel={() => setCloseConfirmOpen(false)}
+        onOk={() => {
+          void confirmClose();
+        }}
+        open={closeConfirmOpen}
+        title="关闭 Apifox Proxy？"
+      >
+        <p>
+          关闭前请先将微信开发者工具的代理设置还原，否则关闭本应用后请求可能继续指向已停止的代理。
+        </p>
         <p className="close-guide-path">设置 → 代理设置 → 代理 → 手动设置代理</p>
       </Modal>
     </main>
   );
 }
 
-function InitializationState(props: { busy: boolean; error: string; onRetry: () => Promise<void> }) {
-  if (props.busy) return <main className="app-loading"><Spin tip="正在读取本地配置..." size="large"><div className="loading-space" /></Spin></main>;
+function InitializationState(props: {
+  busy: boolean;
+  error: string;
+  onRetry: () => Promise<void>;
+}) {
+  if (props.busy)
+    return (
+      <main className="app-loading">
+        <Spin tip="正在读取本地配置..." size="large">
+          <div className="loading-space" />
+        </Spin>
+      </main>
+    );
   return (
-    <main className="app-loading"><section className="initialization-error"><AlertCircle size={28} /><h1>应用初始化失败</h1><p>{props.error}</p><Button type="primary" onClick={props.onRetry}>重试</Button></section></main>
+    <main className="app-loading">
+      <section className="initialization-error">
+        <AlertCircle size={28} />
+        <h1>应用初始化失败</h1>
+        <p>{props.error}</p>
+        <Button type="primary" onClick={props.onRetry}>
+          重试
+        </Button>
+      </section>
+    </main>
   );
 }
 
 interface WorkspaceProps {
   activeProfile: DesktopSnapshot["profiles"][number] | null;
   snapshot: DesktopSnapshot;
-  apply: (action: Promise<DesktopSnapshot>, label: string, notifySuccess?: boolean) => Promise<void>;
-  applyProxyTransition: (action: Promise<DesktopSnapshot>, label: string, notifySuccess?: boolean) => Promise<void>;
+  apply: (
+    action: Promise<DesktopSnapshot>,
+    label: string,
+    notifySuccess?: boolean,
+  ) => Promise<void>;
+  applyProxyTransition: (
+    action: Promise<DesktopSnapshot>,
+    label: string,
+    notifySuccess?: boolean,
+  ) => Promise<void>;
   execute: (action: Promise<unknown>, label: string) => Promise<void>;
   validateApifox: typeof desktop.validateApifox;
   projectNavigation: ComponentProps<typeof ProjectSidebar>;
@@ -222,51 +305,156 @@ interface WorkspaceProps {
 
 function Workspace(props: WorkspaceProps) {
   const profile = props.activeProfile;
-  if (!profile) return <><ProjectSidebar {...props.projectNavigation} /><EmptyWorkspace /></>;
+  if (!profile)
+    return (
+      <>
+        <ProjectSidebar {...props.projectNavigation} />
+        <EmptyWorkspace />
+      </>
+    );
   const currentProfile = profile;
   const { message } = AntApp.useApp();
   async function debugSingle(ruleId: string) {
-    await props.applyProxyTransition(desktop.setGlobalMockEnabled(currentProfile.id, true), "开启全局 Mock", false);
+    await props.applyProxyTransition(
+      desktop.setGlobalMockEnabled(currentProfile.id, true),
+      "开启全局 Mock",
+      false,
+    );
     const currentRule = currentProfile.rules.find((rule) => rule.id === ruleId);
     if (currentRule && !currentRule.enabled) {
-      await props.apply(desktop.setRuleEnabled(currentProfile.id, ruleId, true), "开启当前接口 Mock", false);
+      await props.apply(
+        desktop.setRuleEnabled(currentProfile.id, ruleId, true),
+        "开启当前接口 Mock",
+        false,
+      );
     }
     const otherRules = currentProfile.rules.filter((rule) => rule.id !== ruleId && rule.enabled);
     for (const rule of otherRules) {
-      await props.apply(desktop.setRuleEnabled(currentProfile.id, rule.id, false), "关闭其他接口 Mock", false);
+      await props.apply(
+        desktop.setRuleEnabled(currentProfile.id, rule.id, false),
+        "关闭其他接口 Mock",
+        false,
+      );
     }
     void message.success("已关闭其他接口，仅保留当前接口");
   }
   return (
     <>
-      <ProxyHeader appVersion={props.appVersion} globalMockEnabled={profile.globalMockEnabled} profile={profile} status={props.snapshot.proxyStatus} />
+      <ProxyHeader
+        appVersion={props.appVersion}
+        globalMockEnabled={profile.globalMockEnabled}
+        profile={profile}
+        status={props.snapshot.proxyStatus}
+      />
       <ProjectSidebar {...props.projectNavigation} />
       <div className="workspace-grid">
-        <ConnectionGuide certificate={props.snapshot.certificate} hasTraffic={props.snapshot.logs.length > 0} profile={profile} proxyStatus={props.snapshot.proxyStatus} />
+        <ConnectionGuide
+          certificate={props.snapshot.certificate}
+          hasTraffic={props.snapshot.logs.length > 0}
+          profile={profile}
+          proxyStatus={props.snapshot.proxyStatus}
+        />
         <div className="workspace-config-actions">
-          <LocalMockPanel profileId={profile.id} responses={profile.localResponses} onSave={(input) => props.apply(desktop.saveLocalResponse(input), "保存本地 Mock 响应")} onDelete={(id) => props.apply(desktop.deleteLocalResponse(profile.id, id), "删除本地 Mock 响应")} />
-          <ApifoxSyncPanel profile={profile} onSync={(request) => props.apply(desktop.syncApifox(request), "同步 Apifox 接口")} onValidate={props.validateApifox} />
-          <CertificatePanel certificate={props.snapshot.certificate} onGenerate={() => props.apply(desktop.generateCertificate(), "生成证书")} onOpen={() => props.execute(desktop.openCertificate(), "打开证书")} onRefresh={() => props.apply(desktop.refreshCertificate(), "刷新证书信任")} />
+          <LocalMockPanel
+            profileId={profile.id}
+            responses={profile.localResponses}
+            onSave={(input) => props.apply(desktop.saveLocalResponse(input), "保存本地 Mock 响应")}
+            onDelete={(id) =>
+              props.apply(desktop.deleteLocalResponse(profile.id, id), "删除本地 Mock 响应")
+            }
+          />
+          <ApifoxSyncPanel
+            profile={profile}
+            onSync={(request) => props.apply(desktop.syncApifox(request), "同步 Apifox 接口")}
+            onValidate={props.validateApifox}
+          />
+          <CertificatePanel
+            certificate={props.snapshot.certificate}
+            onGenerate={() => props.apply(desktop.generateCertificate(), "生成证书")}
+            onOpen={() => props.execute(desktop.openCertificate(), "打开证书")}
+            onRefresh={() => props.apply(desktop.refreshCertificate(), "刷新证书信任")}
+          />
         </div>
       </div>
-      <RuleTable disabled={props.proxyTransition} profiles={props.snapshot.profiles} profile={profile} localResponses={profile.localResponses} onDebugSingle={debugSingle} onDelete={(id) => props.apply(desktop.deleteRule(profile.id, id), "删除 Mock 接口")} onDeleteMany={(ids) => props.apply(desktop.deleteRules(profile.id, ids), "批量删除 Mock 接口")} onMove={(ruleIds, targetProfileId) => props.apply(desktop.moveRules(profile.id, targetProfileId, ruleIds), "移动 Mock 接口")} onOpenUrl={(url) => props.execute(desktop.openExternalUrl(url), "打开 Apifox 接口")} onResolve={desktop.resolveApifoxOperation} onSave={(input: RuleInput) => props.apply(desktop.saveRule(input), "保存 Mock 接口")} onToggle={(id, enabled) => props.apply(desktop.setRuleEnabled(profile.id, id, enabled), "切换接口 Mock")} onToggleAll={(enabled) => props.apply(desktop.setAllRulesEnabled(profile.id, enabled), "批量切换接口 Mock")} onToggleGlobal={(enabled) => props.applyProxyTransition(desktop.setGlobalMockEnabled(profile.id, enabled), "切换全局 Mock")} />
-      <RequestLogPanel logs={props.snapshot.logs} profiles={props.snapshot.profiles} onClear={() => props.apply(desktop.clearLogs(), "清空请求记录")} onPreview={desktop.previewMockResponse} />
+      <RuleTable
+        disabled={props.proxyTransition}
+        profiles={props.snapshot.profiles}
+        profile={profile}
+        localResponses={profile.localResponses}
+        onDebugSingle={debugSingle}
+        onDelete={(id) => props.apply(desktop.deleteRule(profile.id, id), "删除 Mock 接口")}
+        onDeleteMany={(ids) =>
+          props.apply(desktop.deleteRules(profile.id, ids), "批量删除 Mock 接口")
+        }
+        onMove={(ruleIds, targetProfileId) =>
+          props.apply(desktop.moveRules(profile.id, targetProfileId, ruleIds), "移动 Mock 接口")
+        }
+        onOpenUrl={(url) => props.execute(desktop.openExternalUrl(url), "打开 Apifox 接口")}
+        onResolve={desktop.resolveApifoxOperation}
+        onSave={(input: RuleInput) => props.apply(desktop.saveRule(input), "保存 Mock 接口")}
+        onToggle={(id, enabled) =>
+          props.apply(desktop.setRuleEnabled(profile.id, id, enabled), "切换接口 Mock")
+        }
+        onToggleAll={(enabled) =>
+          props.apply(desktop.setAllRulesEnabled(profile.id, enabled), "批量切换接口 Mock")
+        }
+        onToggleGlobal={(enabled) =>
+          props.applyProxyTransition(
+            desktop.setGlobalMockEnabled(profile.id, enabled),
+            "切换全局 Mock",
+          )
+        }
+      />
+      <RequestLogPanel
+        logs={props.snapshot.logs}
+        profiles={props.snapshot.profiles}
+        onClear={() => props.apply(desktop.clearLogs(), "清空请求记录")}
+        onPreview={desktop.previewMockResponse}
+      />
     </>
   );
 }
 
 function EmptyWorkspace() {
-  return <section className="empty-workspace"><Empty image={<Monitor size={36} />} description={<><h1>创建第一个联调项目</h1><p>点击上方“新建项目”按钮，配置小程序真实接口域名和本地代理端口。</p></>} /></section>;
+  return (
+    <section className="empty-workspace">
+      <Empty
+        image={<Monitor size={36} />}
+        description={
+          <>
+            <h1>创建第一个联调项目</h1>
+            <p>点击上方“新建项目”按钮，配置小程序真实接口域名和本地代理端口。</p>
+          </>
+        }
+      />
+    </section>
+  );
 }
 
 function RuntimeNotice() {
   if (desktop.isDesktopRuntime()) return null;
-  return <Alert className="runtime-notice" message="当前为网页预览，网络代理、本地配置和证书功能只在打包后的桌面应用中可用。" showIcon type="warning" />;
+  return (
+    <Alert
+      className="runtime-notice"
+      message="当前为网页预览，网络代理、本地配置和证书功能只在打包后的桌面应用中可用。"
+      showIcon
+      type="warning"
+    />
+  );
 }
 
 function ErrorBanner({ error, onClose }: { error: string; onClose: () => void }) {
   if (!error) return null;
-  return <Alert className="error-banner" closable message={error} onClose={onClose} showIcon type="error" />;
+  return (
+    <Alert
+      className="error-banner"
+      closable
+      message={error}
+      onClose={onClose}
+      showIcon
+      type="error"
+    />
+  );
 }
 
 function errorMessage(reason: unknown) {

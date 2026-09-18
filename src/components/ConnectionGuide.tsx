@@ -13,11 +13,29 @@ export function ConnectionGuide(props: ConnectionGuideProps) {
   const endpoint = `127.0.0.1:${props.profile.port}`;
   return (
     <section className="connection-guide">
-      <div><span className="section-kicker">WECHAT DEVTOOLS</span><strong>接入检查</strong></div>
+      <div>
+        <span className="section-kicker">WECHAT DEVTOOLS</span>
+        <strong>接入检查</strong>
+      </div>
       <GuideCheck ready={props.certificate.trusted} text="CA 已导入并设为始终信任" />
-      <GuideCheck ready={props.proxyStatus === "running"} text={proxyStatusText(props.proxyStatus)} />
+      <GuideCheck
+        ready={props.proxyStatus === "running"}
+        text={proxyStatusText(props.proxyStatus)}
+      />
       <GuideCheck ready={props.hasTraffic} text="已收到微信开发者工具流量" />
-      <div className="guide-endpoint"><span>在微信开发者工具代理设置中填写</span><code>{endpoint}</code><Tooltip title="复制"><Button aria-label="复制代理地址" className="copy-button" icon={<Copy size={14} />} onClick={() => navigator.clipboard.writeText(endpoint)} type="text" /></Tooltip></div>
+      <div className="guide-endpoint">
+        <span>在微信开发者工具代理设置中填写</span>
+        <code>{endpoint}</code>
+        <Tooltip title="复制">
+          <Button
+            aria-label="复制代理地址"
+            className="copy-button"
+            icon={<Copy size={14} />}
+            onClick={() => navigator.clipboard.writeText(endpoint)}
+            type="text"
+          />
+        </Tooltip>
+      </div>
     </section>
   );
 }
@@ -30,6 +48,17 @@ function proxyStatusText(status: ProxyStatus) {
 }
 
 function GuideCheck({ ready, text }: { ready: boolean; text: string }) {
-  if (ready) return <div className="guide-check guide-ready"><CheckCircle2 size={16} /><span>{text}</span></div>;
-  return <div className="guide-check"><Circle size={16} /><span>{text}</span></div>;
+  if (ready)
+    return (
+      <div className="guide-check guide-ready">
+        <CheckCircle2 size={16} />
+        <span>{text}</span>
+      </div>
+    );
+  return (
+    <div className="guide-check">
+      <Circle size={16} />
+      <span>{text}</span>
+    </div>
+  );
 }

@@ -15,7 +15,8 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
           colorSuccess: "#16835f",
           colorError: "#c83f49",
           borderRadius: 6,
-          fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          fontFamily:
+            "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         },
       }}
     >

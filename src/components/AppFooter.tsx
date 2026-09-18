@@ -20,12 +20,31 @@ export function AppFooter({ version }: AppFooterProps) {
   return (
     <footer className="app-footer">
       <span>v{version}</span>
-      <span aria-hidden="true" className="app-footer-divider">|</span>
-      <a href={PROJECT_URL} onClick={openExternal} rel="noopener noreferrer" target="_blank" title="Apifox Proxy 项目主页">
-        <Github aria-hidden="true" size={13} />项目
+      <span aria-hidden="true" className="app-footer-divider">
+        |
+      </span>
+      <a
+        href={PROJECT_URL}
+        onClick={openExternal}
+        rel="noopener noreferrer"
+        target="_blank"
+        title="Apifox Proxy 项目主页"
+      >
+        <Github aria-hidden="true" size={13} />
+        项目
       </a>
-      <span aria-hidden="true" className="app-footer-divider">|</span>
-      <a href={AUTHOR_URL} onClick={openExternal} rel="noopener noreferrer" target="_blank" title="Jsmond2016 的 GitHub 主页">作者-Jsmond2016</a>
+      <span aria-hidden="true" className="app-footer-divider">
+        |
+      </span>
+      <a
+        href={AUTHOR_URL}
+        onClick={openExternal}
+        rel="noopener noreferrer"
+        target="_blank"
+        title="Jsmond2016 的 GitHub 主页"
+      >
+        作者-Jsmond2016
+      </a>
     </footer>
   );
 }

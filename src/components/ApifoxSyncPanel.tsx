@@ -1,51 +1,47 @@
-import { Alert, Button, Form, Input, List, Modal, Select } from "antd"
-import { CloudDownload, KeyRound, Link2, RefreshCw } from "lucide-react"
-import { useEffect, useState } from "react"
-import type { ApifoxPreview, ApifoxRequest, ProjectProfile } from "../types"
+import { Alert, Button, Form, Input, List, Modal, Select } from "antd";
+import { CloudDownload, KeyRound, Link2, RefreshCw } from "lucide-react";
+import { useEffect, useState } from "react";
+import type { ApifoxPreview, ApifoxRequest, ProjectProfile } from "../types";
 
 interface ApifoxSyncPanelProps {
-  profile: ProjectProfile
-  onSync: (request: ApifoxRequest) => Promise<void>
-  onValidate: (request: ApifoxRequest) => Promise<ApifoxPreview>
+  profile: ProjectProfile;
+  onSync: (request: ApifoxRequest) => Promise<void>;
+  onValidate: (request: ApifoxRequest) => Promise<ApifoxPreview>;
 }
 
 export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
-  const [projectId, setProjectId] = useState(props.profile.apifox.projectId)
-  const [mockPrefix, setMockPrefix] = useState(props.profile.apifox.mockPrefix)
-  const [accessToken, setAccessToken] = useState(
-    props.profile.apifox.accessToken,
-  )
-  const [mockToken, setMockToken] = useState(props.profile.apifox.mockToken)
-  const [selectedTags, setSelectedTags] = useState<string[]>(
-    props.profile.syncedTags,
-  )
-  const [availableTags, setAvailableTags] = useState<string[]>([])
-  const [validated, setValidated] = useState(false)
-  const [preview, setPreview] = useState<ApifoxPreview | null>(null)
-  const [validateBusy, setValidateBusy] = useState(false)
-  const [confirmBusy, setConfirmBusy] = useState(false)
-  const [syncBusy, setSyncBusy] = useState(false)
-  const [open, setOpen] = useState(false)
+  const [projectId, setProjectId] = useState(props.profile.apifox.projectId);
+  const [mockPrefix, setMockPrefix] = useState(props.profile.apifox.mockPrefix);
+  const [accessToken, setAccessToken] = useState(props.profile.apifox.accessToken);
+  const [mockToken, setMockToken] = useState(props.profile.apifox.mockToken);
+  const [selectedTags, setSelectedTags] = useState<string[]>(props.profile.syncedTags);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [validated, setValidated] = useState(false);
+  const [preview, setPreview] = useState<ApifoxPreview | null>(null);
+  const [validateBusy, setValidateBusy] = useState(false);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    setProjectId(props.profile.apifox.projectId)
-    setMockPrefix(props.profile.apifox.mockPrefix)
-    setSelectedTags(props.profile.syncedTags)
-    setAvailableTags([])
-    setAccessToken(props.profile.apifox.accessToken)
-    setMockToken(props.profile.apifox.mockToken)
-    setValidated(false)
-    setPreview(null)
-  }, [props.profile.id])
+    setProjectId(props.profile.apifox.projectId);
+    setMockPrefix(props.profile.apifox.mockPrefix);
+    setSelectedTags(props.profile.syncedTags);
+    setAvailableTags([]);
+    setAccessToken(props.profile.apifox.accessToken);
+    setMockToken(props.profile.apifox.mockToken);
+    setValidated(false);
+    setPreview(null);
+  }, [props.profile.id]);
 
   useEffect(() => {
-    if (!open) return
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = "hidden"
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = previousOverflow
-    }
-  }, [open])
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
 
   function request(): ApifoxRequest {
     const value: ApifoxRequest = {
@@ -55,62 +51,58 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
       localOpenapiUrl: "",
       mockPrefix: mockPrefix.trim(),
       selectedTags,
-    }
-    if (accessToken.trim()) value.accessToken = accessToken.trim()
-    if (mockToken.trim()) value.mockToken = mockToken.trim()
-    return value
+    };
+    if (accessToken.trim()) value.accessToken = accessToken.trim();
+    if (mockToken.trim()) value.mockToken = mockToken.trim();
+    return value;
   }
 
   function invalidate() {
-    setValidated(false)
-    setPreview(null)
-    setAvailableTags([])
+    setValidated(false);
+    setPreview(null);
+    setAvailableTags([]);
   }
 
   async function validateConnection() {
-    setValidateBusy(true)
+    setValidateBusy(true);
     try {
-      const discoveryRequest = request()
-      discoveryRequest.selectedTags = []
-      const result = await props.onValidate(discoveryRequest)
-      setAvailableTags(result.availableTags)
-      setSelectedTags((current) =>
-        current.filter((tag) => result.availableTags.includes(tag)),
-      )
+      const discoveryRequest = request();
+      discoveryRequest.selectedTags = [];
+      const result = await props.onValidate(discoveryRequest);
+      setAvailableTags(result.availableTags);
+      setSelectedTags((current) => current.filter((tag) => result.availableTags.includes(tag)));
       if (!mockPrefix.trim()) {
-        setMockPrefix(
-          `https://m1.apifoxmock.com/m1/${projectId.trim()}-0-default`,
-        )
+        setMockPrefix(`https://m1.apifoxmock.com/m1/${projectId.trim()}-0-default`);
       }
-      setValidated(true)
-      setPreview(null)
+      setValidated(true);
+      setPreview(null);
     } finally {
-      setValidateBusy(false)
+      setValidateBusy(false);
     }
   }
 
   function changeTags(tags: string[]) {
-    setSelectedTags(tags)
-    setPreview(null)
+    setSelectedTags(tags);
+    setPreview(null);
   }
 
   async function confirmTags() {
-    setConfirmBusy(true)
+    setConfirmBusy(true);
     try {
-      setPreview(await props.onValidate(request()))
+      setPreview(await props.onValidate(request()));
     } finally {
-      setConfirmBusy(false)
+      setConfirmBusy(false);
     }
   }
 
   async function applySync() {
-    if (!preview) return
-    setSyncBusy(true)
+    if (!preview) return;
+    setSyncBusy(true);
     try {
-      await props.onSync(request())
-      setPreview(null)
+      await props.onSync(request());
+      setPreview(null);
     } finally {
-      setSyncBusy(false)
+      setSyncBusy(false);
     }
   }
 
@@ -127,9 +119,7 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
       <Modal
         className="apifox-sync-modal"
         footer={null}
-        modalRender={(node) => (
-          <div onWheel={(event) => event.stopPropagation()}>{node}</div>
-        )}
+        modalRender={(node) => <div onWheel={(event) => event.stopPropagation()}>{node}</div>}
         onCancel={() => setOpen(false)}
         open={open}
         title="连接并同步 Apifox 接口"
@@ -159,8 +149,8 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
                 placeholder="请输入 Apifox 项目 ID"
                 value={projectId}
                 onChange={(event) => {
-                  setProjectId(event.target.value)
-                  invalidate()
+                  setProjectId(event.target.value);
+                  invalidate();
                 }}
               />
             </Form.Item>
@@ -176,8 +166,8 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
                 placeholder="留空则按项目 ID 自动生成"
                 value={mockPrefix}
                 onChange={(event) => {
-                  setMockPrefix(event.target.value)
-                  invalidate()
+                  setMockPrefix(event.target.value);
+                  invalidate();
                 }}
               />
             </Form.Item>
@@ -193,8 +183,8 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
                 placeholder="可选"
                 value={accessToken}
                 onChange={(event) => {
-                  setAccessToken(event.target.value)
-                  invalidate()
+                  setAccessToken(event.target.value);
+                  invalidate();
                 }}
               />
             </Form.Item>
@@ -210,8 +200,8 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
                 placeholder="可选，用于 Apifox Mock 鉴权"
                 value={mockToken}
                 onChange={(event) => {
-                  setMockToken(event.target.value)
-                  invalidate()
+                  setMockToken(event.target.value);
+                  invalidate();
                 }}
               />
             </Form.Item>
@@ -235,37 +225,28 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
             onConfirm={confirmTags}
             onTags={changeTags}
           />
-          <InterfacePreviewPanel
-            busy={syncBusy}
-            preview={preview}
-            onApply={applySync}
-          />
+          <InterfacePreviewPanel busy={syncBusy} preview={preview} onApply={applySync} />
         </section>
       </Modal>
     </>
-  )
+  );
 }
 
 interface ConnectionResultProps {
-  validated: boolean
-  busy: boolean
-  confirmBusy: boolean
-  availableTags: string[]
-  selectedTags: string[]
-  onTags: (tags: string[]) => void
-  onConfirm: () => Promise<void>
+  validated: boolean;
+  busy: boolean;
+  confirmBusy: boolean;
+  availableTags: string[];
+  selectedTags: string[];
+  onTags: (tags: string[]) => void;
+  onConfirm: () => Promise<void>;
 }
 
 function ConnectionResult(props: ConnectionResultProps) {
   if (!props.validated)
-    return (
-      <div className="sync-placeholder">
-        填写连接信息并验证后，再选择需要同步的 Tag。
-      </div>
-    )
-  const requiresTag = props.availableTags.length > 0
-  const disabled =
-    props.busy || (requiresTag && props.selectedTags.length === 0)
+    return <div className="sync-placeholder">填写连接信息并验证后，再选择需要同步的 Tag。</div>;
+  const requiresTag = props.availableTags.length > 0;
+  const disabled = props.busy || (requiresTag && props.selectedTags.length === 0);
   return (
     <div className="tag-sync-row">
       <Alert
@@ -289,16 +270,16 @@ function ConnectionResult(props: ConnectionResultProps) {
         确认 Tag 并拉取接口
       </Button>
     </div>
-  )
+  );
 }
 
 function TagMultiSelect(props: {
-  options: string[]
-  value: string[]
-  onChange: (tags: string[]) => void
+  options: string[];
+  value: string[];
+  onChange: (tags: string[]) => void;
 }) {
   if (props.options.length === 0)
-    return <div className="tag-empty">OpenAPI 未声明 Tag，将同步全部接口</div>
+    return <div className="tag-empty">OpenAPI 未声明 Tag，将同步全部接口</div>;
   return (
     <Select
       allowClear
@@ -312,24 +293,23 @@ function TagMultiSelect(props: {
       showSearch
       value={props.value}
     />
-  )
+  );
 }
 
 function InterfacePreviewPanel(props: {
-  preview: ApifoxPreview | null
-  busy: boolean
-  onApply: () => Promise<void>
+  preview: ApifoxPreview | null;
+  busy: boolean;
+  onApply: () => Promise<void>;
 }) {
-  if (!props.preview) return null
+  if (!props.preview) return null;
   return (
     <div className="interface-preview">
       <div className="interface-preview-head">
         <div>
           <strong>已拉取 {props.preview.selectedOperationCount} 个接口</strong>
           <span>
-            新增 {props.preview.addedCount} · 更新 {props.preview.updatedCount}{" "}
-            · 删除 {props.preview.removedCount} · 保留{" "}
-            {props.preview.retainedCount}
+            新增 {props.preview.addedCount} · 更新 {props.preview.updatedCount} · 删除{" "}
+            {props.preview.removedCount} · 保留 {props.preview.retainedCount}
           </span>
         </div>
         <Button
@@ -347,9 +327,7 @@ function InterfacePreviewPanel(props: {
         dataSource={props.preview.interfaces.slice(0, 8)}
         renderItem={(item) => (
           <List.Item key={item.id}>
-            <span
-              className={`method-badge method-${item.method.toLowerCase()}`}
-            >
+            <span className={`method-badge method-${item.method.toLowerCase()}`}>
               {item.method}
             </span>
             <code>{item.path}</code>
@@ -359,18 +337,14 @@ function InterfacePreviewPanel(props: {
       />
       <PreviewRemainder total={props.preview.interfaces.length} />
     </div>
-  )
+  );
 }
 
 function PreviewRemainder({ total }: { total: number }) {
-  if (total <= 8) return null
-  return (
-    <small className="preview-remainder">
-      另有 {total - 8} 个接口将在确认后同步
-    </small>
-  )
+  if (total <= 8) return null;
+  return <small className="preview-remainder">另有 {total - 8} 个接口将在确认后同步</small>;
 }
 function apifoxEntryLabel(profile: ProjectProfile) {
-  if (profile.syncedTags.length > 0) return "Apifox 接口"
-  return "连接 Apifox"
+  if (profile.syncedTags.length > 0) return "Apifox 接口";
+  return "连接 Apifox";
 }

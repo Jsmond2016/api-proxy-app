@@ -1,15 +1,15 @@
-import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { cpSync, mkdtempSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
+import { getProjectVersion } from "./version-utils.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
-const packageJson = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
 const bundleDirectory = path.join(root, "src-tauri", "target", "release", "bundle");
 const appPath = path.join(bundleDirectory, "macos", "Apifox Proxy.app");
 const architecture = process.arch === "arm64" ? "aarch64" : process.arch;
-const outputPath = path.join(bundleDirectory, "dmg", `Apifox Proxy_${packageJson.version}_${architecture}.dmg`);
+const outputPath = path.join(bundleDirectory, "dmg", `Apifox Proxy_${getProjectVersion()}_${architecture}.dmg`);
 const stagingDirectory = mkdtempSync(path.join(os.tmpdir(), "apifox-proxy-dmg-"));
 
 function run(command, args) {

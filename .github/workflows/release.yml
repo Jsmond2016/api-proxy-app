@@ -57,7 +57,7 @@ jobs:
             node scripts/verify-release-version.mjs --tag "$tag" --github-output >> "$GITHUB_OUTPUT"
           else
             node scripts/verify-release-version.mjs --github-output >> "$GITHUB_OUTPUT"
-            tag="v$(node -p "require('./package.json').version")"
+            tag="v$(node --input-type=module -e "import('./scripts/version-utils.mjs').then(({ getProjectVersion }) => process.stdout.write(getProjectVersion()))")"
           fi
 
           previous_tag="$(git tag --list 'v*' --sort=-version:refname | grep -Fvx "$tag" | head -n 1 || true)"

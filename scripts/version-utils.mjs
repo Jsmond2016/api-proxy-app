@@ -6,6 +6,7 @@ export const root = path.resolve(import.meta.dirname, "..");
 const cargoPackagePattern = /^(version\s*=\s*)"[^"]+"/m;
 const cargoLockPackagePattern = /(name = "tauri-app"[\s\S]*?version = )"([^"]+)"/;
 const versionPattern = /^(\d+)\.(\d+)\.(\d+)(?:-(beta|rc)\.(\d+))?$/;
+const versionFile = "VERSION";
 
 function resolveProjectFile(file) {
   return path.join(root, file);
@@ -13,6 +14,10 @@ function resolveProjectFile(file) {
 
 function readJson(file) {
   return JSON.parse(readFileSync(resolveProjectFile(file), "utf8"));
+}
+
+export function getProjectVersion() {
+  return readFileSync(resolveProjectFile(versionFile), "utf8").trim();
 }
 
 function writeJson(file, value) {
@@ -179,10 +184,11 @@ export function readProjectVersions() {
 
 export function assertProjectVersionsMatch() {
   const versions = readProjectVersions();
+  const sourceVersion = getProjectVersion();
   const uniqueVersions = new Set(Object.values(versions));
 
-  if (uniqueVersions.size !== 1) {
-    throw new Error(`Version mismatch: ${JSON.stringify(versions)}`);
+  if (uniqueVersions.size !== 1 || sourceVersion !== versions.packageJson) {
+    throw new Error(`Version mismatch: ${JSON.stringify({ source: sourceVersion, ...versions })}`);
   }
 
   parseVersion(versions.packageJson);
@@ -191,6 +197,7 @@ export function assertProjectVersionsMatch() {
 
 export function updateProjectVersion(version) {
   parseVersion(version);
+  writeFileSync(resolveProjectFile(versionFile), `${version}\n`);
 
   const packageJson = readJson("package.json");
   packageJson.version = version;

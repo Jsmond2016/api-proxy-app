@@ -84,7 +84,13 @@ src-tauri/target/release/bundle/dmg/Apifox Proxy_<version>_aarch64.dmg
 
 ## 发布与下载
 
-面向用户的安装包和版本变更记录发布在 [GitHub Releases](https://github.com/Jsmond2016/api-proxy-app/releases)。首期仅提供 Apple Silicon Mac 的 DMG；当前为 ad-hoc 签名包，首次打开时 macOS 可能要求在系统设置中手动允许。
+面向用户的安装包和版本变更记录发布在 [GitHub Releases](https://github.com/Jsmond2016/api-proxy-app/releases)。下载步骤：
+
+1. 打开 Releases 页面，选择没有 `Pre-release` 标识的最新正式版本。
+2. 在该版本的 Assets 中下载 `Apifox-Proxy_<version>_aarch64.dmg`。
+3. 将 DMG 拖入“应用程序”后打开。首期仅支持 Apple Silicon Mac，且为 ad-hoc 签名包；首次打开时 macOS 可能要求在系统设置中手动允许。
+
+带有 `beta` 或 `rc` 的版本是预发布版本，仅用于体验和验证。需要校验下载文件时，同时下载同名的 `.sha256` 文件并执行：
 
 下载 Release Assets 后可校验文件完整性：
 

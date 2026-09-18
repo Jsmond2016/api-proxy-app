@@ -15,11 +15,55 @@ use commands::{
     start_proxy, stop_proxy, sync_apifox, update_profile, validate_apifox,
 };
 use state::AppState;
-use tauri::{Emitter, Manager};
+use tauri::menu::{Menu, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
+
+const DEVTOOLS_MENU_ID: &str = "toggle-devtools";
+
+fn build_app_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
+    let menu = Menu::default(app)?;
+    let devtools_item = MenuItemBuilder::with_id(DEVTOOLS_MENU_ID, "开发者工具")
+        .accelerator("CmdOrCtrl+Alt+I")
+        .build(app)?;
+    let separator = PredefinedMenuItem::separator(app)?;
+
+    for item in menu.items()? {
+        if let Some(submenu) = item.as_submenu() {
+            if submenu.text()? == "View" {
+                submenu.set_text("视图")?;
+                submenu.append_items(&[&separator, &devtools_item])?;
+                return Ok(menu);
+            }
+        }
+    }
+
+    let view_menu = SubmenuBuilder::new(app, "视图")
+        .item(&devtools_item)
+        .build()?;
+    let position = menu.items()?.len().saturating_sub(2);
+    menu.insert(&view_menu, position)?;
+    Ok(menu)
+}
+
+fn toggle_devtools<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(window) = app.get_webview_window("main") {
+        if window.is_devtools_open() {
+            window.close_devtools();
+        } else {
+            window.open_devtools();
+        }
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .menu(build_app_menu)
+        .on_menu_event(|app, event| {
+            if event.id() == DEVTOOLS_MENU_ID {
+                toggle_devtools(app);
+            }
+        })
         .setup(|app| {
             let data_directory = app.path().app_data_dir()?;
             let state = AppState::load(data_directory)?;

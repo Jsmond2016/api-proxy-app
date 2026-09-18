@@ -332,10 +332,17 @@ h2 {
   color: #365747;
 }
 
-.command-button {
-  border: 1px solid #1f5b43;
-  background: #1f5b43;
-  color: #ffffff;
+.command-button.ant-btn-primary,
+.command-button.ant-btn-primary:hover,
+.command-button.ant-btn-primary:focus,
+.command-button.ant-btn-primary:active {
+  border-color: #1f5b43 !important;
+  background: #1f5b43 !important;
+  color: #ffffff !important;
+}
+
+.command-button.ant-btn-loading {
+  opacity: 1;
 }
 
 .stop-button {
@@ -542,19 +549,6 @@ h2 {
   min-width: 420px;
 }
 
-.sync-submit.ant-btn-primary {
-  border-color: #16835f !important;
-  background: #16835f !important;
-  color: #ffffff !important;
-}
-
-.sync-submit.ant-btn-primary:hover,
-.sync-submit.ant-btn-primary:focus {
-  border-color: #126b4e !important;
-  background: #126b4e !important;
-  color: #ffffff !important;
-}
-
 .rule-name-line {
   display: flex;
   align-items: center;
@@ -625,7 +619,7 @@ h2 {
   font-size: 12px;
 }
 
-.interface-preview-head span,
+.interface-preview-head > div > span,
 .preview-remainder {
   color: #718277;
   font-size: 10px;
@@ -953,22 +947,19 @@ h2 {
   box-shadow: 0 0 0 2px rgba(91, 142, 101, .12);
 }
 
-.sync-submit {
+.interface-preview-head > .command-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   height: 30px;
   gap: 5px;
   padding: 0 9px;
-  border: 1px solid #16835f;
   border-radius: 4px;
-  background: #16835f;
-  color: #ffffff;
   font-size: 10px;
   font-weight: 700;
 }
 
-.sync-submit:disabled {
+.interface-preview-head > .command-button:disabled {
   cursor: progress;
 }
 

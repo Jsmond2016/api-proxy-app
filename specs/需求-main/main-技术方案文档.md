@@ -90,6 +90,7 @@ Rust Application Services
 | R60 | 已 Mock 且对应规则仍存在的请求记录行末提供查看入口；弹窗仅以标签和值展示命中规则的接口 URL、名称、Mock URL、本地预设、请求方式、匹配方式、Tags、优先级、开关和 Apifox Web 链接，不提供编辑或测试操作 | `App.tsx`、`RequestLogPanel.tsx`、`App.css` | GPT-5 Codex | 前端构建、查看入口状态与只读内容源码检查、差异检查 | 已确认 |
 | R61 | 执行既有 `pnpm version:stable` 将四处版本从 `0.1.60-beta.2` 同步为 `0.1.60`；提交并推送至 `main` 后复用既有 Release workflow 自动创建正式 Tag、GitHub Release 和 Apple Silicon Assets | 四处版本文件、绑定文档；不修改应用代码或 workflow | GPT-5 Codex | 版本一致性检查、前端/文档/隐私检查、Rust 测试、远端 Release API 核验 | 已验证 |
 | R62 | 将 README 的发布与下载段改为用户下载步骤，链接固定指向公开 Releases 页面；使用占位符示例说明 DMG 与 SHA-256 文件配对，标明 stable 与 prerelease 的区别 | `README.md` 与绑定文档；不修改代码或 workflow | GPT-5 Codex | Markdown 链接和 `pnpm run check:privacy` 检查 | 已实现 |
+| R63 | 将 `.interface-preview-head span` 收窄为仅匹配接口摘要所在的直接内容容器，例如 `.interface-preview-head > div > span`；保留 `.preview-remainder` 颜色规则。不得修改 `Button` 的 `type`、`className`、`disabled`、`loading` 或 `ConfigProvider` 主题 | `src/App.css`、`ApifoxSyncPanel.tsx`（仅运行时验收）、绑定文档 | GPT-5 Codex | `pnpm build`、`git diff --check`、桌面运行时比较两个按钮及内部文字/图标的 computed color | 已验证 |
 | R12 | 建立 Rust 单元/集成、前端测试和本地双 upstream E2E；更新 README/使用文档；构建并校验 arm64 app/dmg | tests、scripts、docs、Tauri bundle | GPT-5 Codex | `pnpm build`、`check:source`、`cargo test`、E2E、codesign、hdiutil | 已确认 |
 
 ## 数据模型设计
@@ -370,6 +371,8 @@ Content-Type: application/json
 | 2026-09-18 | 晋升 `0.1.60` 正式版本 | R61 | GPT-5 Codex | 四处版本元数据已同步；等待经 CR 确认后提交、推送并触发远端发布 |
 | 2026-09-18 | 新增 README 下载指引方案 | R62 | GPT-5 Codex | 等待确认后仅编辑 README 的发布与下载段 |
 | 2026-09-18 | 完成 README 下载指引 | R62 | GPT-5 Codex | 新增正式版选择、Assets DMG 下载、安装提示、预发布标识和 SHA-256 校验说明 |
+| 2026-09-18 | 记录 R63 按钮颜色问题及修复方案 | R63 | GPT-5 Codex | 运行时证据表明两个按钮的背景、边框、状态和父级透明度均一致；仅接口预览按钮内部文字 `span` 被摘要选择器显式设为 `rgb(113, 130, 119)` |
+| 2026-09-18 | 完成 R63 CSS 选择器作用域修复 | R63 | GPT-5 Codex | `.interface-preview-head span` 已收窄为 `.interface-preview-head > div > span`；不改 Button 属性、同步状态或主题配置 |
 | 2026-09-18 | 验证正式 GitHub Release | R61 | GPT-5 Codex | `v0.1.60` 已创建为非预发布 Release，包含 Apple Silicon DMG 和 SHA-256 Assets |
 | 2026-08-27 | 创建 `main` 分支技术方案，完成参考项目与当前实现差距分析、架构设计、迁移和验证规划 | R1-R12 | GPT-5 Codex | 建立后续完整修复的权威方案；尚未修改实现 |
 | 2026-08-27 | 用户通过 `ac` 确认 R1-R12 | R1-R12 | GPT-5 Codex | 开始按五个增量实施 |
@@ -559,3 +562,31 @@ Content-Type: application/json
 3. 清理被替代的手写基础控件、Modal、Switch、Table 和 Toast CSS，仅保留布局与业务展示样式。
 4. 每个增量执行 TypeScript/Vite 构建和源码规范检查；完成后验证桌面与窄窗口布局、下拉层、弹窗、固定滚动区和长 URL 换行。
 5. 全量验证前端构建、Rust 单测/检查、Tauri 安装包构建及 DMG 完整性。
+
+# R63 Apifox 同步确认按钮颜色修复方案
+
+## 问题记录
+
+接口预览区的“确认同步这些接口”按钮视觉上呈现为深绿背景配灰绿文字和图标，而“确认 Tag 并拉取接口”使用白色文字。用户在桌面应用的开发者工具中采集到以下运行时证据：
+
+- 两个按钮都有 `command-button`、`ant-btn-primary`、`ant-btn-color-primary` 和 `ant-btn-variant-solid` 类，均非 disabled、非 loading。
+- 两个按钮的 computed `background-color`、`border-color`、按钮自身 `color` 都是 `rgb(31, 91, 67)` / `rgb(255, 255, 255)`，父级没有 `opacity` 或 `filter`。
+- 只有接口预览按钮内部的 Ant Design 文本 `span` 被计算为 `rgb(113, 130, 119)`。
+- 根因是 `App.css` 中 `.interface-preview-head span` 匹配了接口摘要的 `span`，也匹配了 Button 自动生成的文字与图标包装 `span`。
+
+## 修复步骤
+
+1. 将摘要文本选择器收窄为 `.interface-preview-head > div > span`，仅匹配标题左侧内容容器中的摘要行。
+2. 保留 `.preview-remainder` 的低权重文字颜色，确保预览列表的辅助文案不回归。
+3. 不修改 `ApifoxSyncPanel.tsx` 中两个 Button 的 `type`、`className`、`disabled` 和 `loading` 属性，也不修改 Ant Design `ConfigProvider` 的主题 token。
+4. 运行 `pnpm build` 与 `git diff --check`；在桌面开发者工具中确认两个按钮及其内部文本、图标的 computed `color` 均为白色，接口摘要仍为灰绿色。
+
+## 风险与非范围
+
+- 此变更只影响 CSS 选择器作用域，不涉及同步请求、状态机、Tauri command 或版本发布。
+- 不通过提高 `!important` 优先级修复，以免继续掩盖选择器越界问题。
+
+## R63 验证记录
+
+- 2026-09-18：`pnpm build` 与 `git diff --check` 通过。
+- 2026-09-18：用户完成桌面人工验收，确认接口预览按钮文字和图标颜色已与“确认 Tag 并拉取接口”一致。

@@ -1,5 +1,6 @@
 import { App as AntApp, Button, Input, Tooltip } from "antd";
 import type { InputRef } from "antd";
+import { useEventListener } from "ahooks";
 import { ChevronDown, ChevronUp, Copy, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
@@ -19,20 +20,13 @@ export function ResponsePayloadViewer(props: ResponsePayloadViewerProps) {
   let activePath = "";
   if (fieldPaths.length > 0) activePath = fieldPaths[matchIndex % fieldPaths.length];
 
-  useEffect(() => {
-    setQuery("");
-    setMatchIndex(0);
-  }, [props.body]);
-  useEffect(() => {
-    function focusSearch(event: globalThis.KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
-        event.preventDefault();
-        searchRef.current?.focus();
-      }
+  useEventListener("keydown", (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
+      event.preventDefault();
+      searchRef.current?.focus();
     }
-    window.addEventListener("keydown", focusSearch);
-    return () => window.removeEventListener("keydown", focusSearch);
-  }, []);
+  });
+
   useEffect(() => {
     if (!query.trim() || matchCount === 0) return;
     const activeMatch = contentRef.current?.querySelector("mark.active-match");

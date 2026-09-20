@@ -14,7 +14,8 @@ import {
 } from "antd";
 import { Download, FileInput, SlidersHorizontal } from "lucide-react";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { errorMessage } from "../lib/format";
 import type {
   ProjectPresetCreateInput,
   ProjectPresetExportInput,
@@ -47,14 +48,10 @@ export function ProjectPresetPanel(props: ProjectPresetPanelProps) {
   const [mockToken, setMockToken] = useState("");
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (!props.activeProfile) return;
-    setExportName(`${props.activeProfile.name} 预设`);
-  }, [props.activeProfile]);
-
   function openExport() {
     if (!props.activeProfile) return;
     setPanelOpen(false);
+    setExportName(`${props.activeProfile.name} 预设`);
     setDescription("");
     setIncludeCredentials(false);
     setExportOpen(true);
@@ -377,11 +374,6 @@ function renderTags(tags: string[]) {
 function defaultExportName(name: string) {
   const base = name.trim().replace(/[\\/:*?"<>|]/g, "-");
   return `${base || "项目预设"}.apifox-proxy-preset.json`;
-}
-
-function errorMessage(reason: unknown) {
-  if (reason instanceof Error) return reason.message;
-  return String(reason);
 }
 
 interface ImportContentProps {

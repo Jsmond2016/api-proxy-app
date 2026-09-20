@@ -1,6 +1,6 @@
 import { Button, Form, Input, InputNumber, Modal, Tabs, Tooltip } from "antd";
 import { FolderPlus, Pencil, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type {
   ProfileInput,
   ProjectPresetCreateInput,
@@ -179,25 +179,12 @@ interface ProfileDialogProps {
 }
 
 function ProfileDialog(props: ProfileDialogProps) {
-  const [name, setName] = useState("");
-  const [hosts, setHosts] = useState("");
-  const [pathPrefix, setPathPrefix] = useState("");
-  const [port, setPort] = useState("8899");
+  const source = props.profile || props.prefill;
+  const [name, setName] = useState(props.profile?.name || "");
+  const [hosts, setHosts] = useState(source?.sourceHosts.join(", ") || "");
+  const [pathPrefix, setPathPrefix] = useState(source?.pathPrefix || "");
+  const [port, setPort] = useState(String(source?.port || 8899));
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (props.profile) {
-      setName(props.profile.name);
-      setHosts(props.profile.sourceHosts.join(", "));
-      setPathPrefix(props.profile.pathPrefix);
-      setPort(String(props.profile.port));
-      return;
-    }
-    setName("");
-    setHosts(props.prefill?.sourceHosts.join(", ") || "");
-    setPathPrefix(props.prefill?.pathPrefix || "");
-    setPort(String(props.prefill?.port || 8899));
-  }, [props.prefill, props.profile]);
 
   if (!props.visible) {
     return null;

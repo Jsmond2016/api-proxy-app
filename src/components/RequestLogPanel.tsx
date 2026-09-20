@@ -12,8 +12,9 @@ import {
 } from "antd";
 import { ArrowRight, Eye, RefreshCw, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { ResponsePayloadViewer } from "./ResponsePayloadViewer";
+import { errorMessage, formatResponseBody } from "../lib/format";
 import type { MockResponsePreview, ProjectProfile, ProxyRule, RequestLog } from "../types";
+import { ResponsePayloadViewer } from "./ResponsePayloadViewer";
 
 interface RequestLogPanelProps {
   logs: RequestLog[];
@@ -264,7 +265,7 @@ function PreviewResponseBody(props: { preview: MockResponsePreview }) {
       {preview.truncated && (
         <Alert message="响应内容超过 512 KB，当前仅展示前半部分。" type="warning" showIcon />
       )}
-      <ResponsePayloadViewer body={body} />
+      <ResponsePayloadViewer key={body} body={body} />
     </div>
   );
 }
@@ -279,13 +280,6 @@ function formatTime(value: string) {
 function formatDate(date: Date) {
   const pad = (part: number) => String(part).padStart(2, "0");
   return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-}
-function formatResponseBody(body: string) {
-  try {
-    return JSON.stringify(JSON.parse(body), null, 2);
-  } catch {
-    return body;
-  }
 }
 function logStreamClass(count: number) {
   if (count > 0) return "log-stream traffic-stream has-logs";
@@ -310,10 +304,6 @@ function statusLabel(status: RequestLog["status"]) {
   if (status === "matched") return "已 Mock";
   if (status === "failed") return "失败";
   return "透传";
-}
-function errorMessage(reason: unknown) {
-  if (reason instanceof Error) return reason.message;
-  return String(reason);
 }
 function EmptyLogs(props: { count: number }) {
   if (props.count > 0) return null;

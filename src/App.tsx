@@ -1,31 +1,18 @@
-import { Alert, App as AntApp, Button, Empty, Modal, Spin } from "antd";
-import { AlertCircle, Monitor } from "lucide-react";
+import { Alert, App as AntApp, Button, Modal, Spin } from "antd";
+import { useMemoizedFn, useRequest } from "ahooks";
+import { AlertCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ComponentProps } from "react";
-import { ApifoxSyncPanel } from "./components/ApifoxSyncPanel";
-import { CertificatePanel } from "./components/CertificatePanel";
-import { ConnectionGuide } from "./components/ConnectionGuide";
 import { DiagnosticPanel } from "./components/DiagnosticPanel";
-import { ProjectSidebar } from "./components/ProjectSidebar";
-import { ProxyHeader } from "./components/ProxyHeader";
-import { RequestLogPanel } from "./components/RequestLogPanel";
 import { AppFooter } from "./components/AppFooter";
-import { RuleTable } from "./components/RuleTable";
-import { LocalMockPanel } from "./components/LocalMockPanel";
+import { Workspace } from "./components/Workspace";
 import * as desktop from "./lib/desktop";
-import type {
-  ApifoxRequest,
-  DesktopSnapshot,
-  DiagnosticEntry,
-  RequestLog,
-  RuleInput,
-} from "./types";
+import { errorMessage } from "./lib/format";
+import type { ApifoxRequest, DesktopSnapshot, DiagnosticEntry, RequestLog } from "./types";
 import "./App.css";
 
 function App() {
   const { message } = AntApp.useApp();
   const [snapshot, setSnapshot] = useState<DesktopSnapshot | null>(null);
-  const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState("");
   const [diagnostics, setDiagnostics] = useState<DiagnosticEntry[]>([]);
   const [appVersion, setAppVersion] = useState(desktop.buildVersion);
@@ -34,10 +21,56 @@ function App() {
   const allowCloseRef = useRef(false);
   const closeListenerRef = useRef<(() => void) | null>(null);
 
+  const showError = useMemoizedFn((reason: unknown) => {
+    setError(errorMessage(reason));
+  });
+
+  const recordDiagnostic = useMemoizedFn(
+    (level: DiagnosticEntry["level"], action: string, detail: string) => {
+      const entry: DiagnosticEntry = {
+        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        createdAt: new Date().toLocaleTimeString("zh-CN", { hour12: false }),
+        level,
+        action,
+        message: detail,
+      };
+      setDiagnostics((current) => [entry, ...current].slice(0, 100));
+    },
+  );
+
+  const mergeRequestLog = useMemoizedFn((log: RequestLog) => {
+    setSnapshot((current) => {
+      if (!current) return current;
+      const logs = [log, ...current.logs.filter((item) => item.id !== log.id)].slice(0, 500);
+      return { ...current, logs };
+    });
+  });
+
+  const { loading: initializing, refresh: refreshSnapshot } = useRequest(
+    desktop.getDesktopSnapshot,
+    {
+      onSuccess(nextSnapshot) {
+        setSnapshot(nextSnapshot);
+        recordDiagnostic("success", "应用启动", "本地配置读取成功");
+      },
+      onError(reason) {
+        showError(reason);
+        recordDiagnostic("error", "应用启动", errorMessage(reason));
+      },
+    },
+  );
+
+  const retryLoadSnapshot = useMemoizedFn(() => {
+    setError("");
+    refreshSnapshot();
+  });
+
+  useRequest(desktop.getAppVersion, {
+    onSuccess: setAppVersion,
+  });
+
   useEffect(() => {
     let unsubscribe: () => void = () => undefined;
-    void loadSnapshot();
-    void desktop.getAppVersion().then(setAppVersion);
     void desktop
       .subscribeProxyEvents(setSnapshot, mergeRequestLog)
       .then((stop) => {
@@ -48,7 +81,7 @@ function App() {
         recordDiagnostic("error", "事件订阅", errorMessage(reason));
       });
     return () => unsubscribe();
-  }, []);
+  }, [mergeRequestLog, recordDiagnostic, showError]);
 
   useEffect(() => {
     if (!desktop.isDesktopRuntime()) return;
@@ -85,81 +118,44 @@ function App() {
     }
   }
 
-  async function loadSnapshot() {
-    setInitializing(true);
-    setError("");
-    try {
-      setSnapshot(await desktop.getDesktopSnapshot());
-      recordDiagnostic("success", "应用启动", "本地配置读取成功");
-    } catch (reason) {
-      showError(reason);
-      recordDiagnostic("error", "应用启动", errorMessage(reason));
-    } finally {
-      setInitializing(false);
-    }
-  }
-
   const activeProfile = useMemo(() => {
     if (!snapshot || !snapshot.activeProfileId) return null;
     return snapshot.profiles.find((profile) => profile.id === snapshot.activeProfileId) || null;
   }, [snapshot]);
 
-  function showError(reason: unknown) {
-    setError(errorMessage(reason));
-  }
-
-  function recordDiagnostic(level: DiagnosticEntry["level"], action: string, message: string) {
-    const entry: DiagnosticEntry = {
-      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      createdAt: new Date().toLocaleTimeString("zh-CN", { hour12: false }),
-      level,
-      action,
-      message,
-    };
-    setDiagnostics((current) => [entry, ...current].slice(0, 100));
-  }
-
-  function notify(level: "success" | "error", title: string, detail: string) {
+  const notify = useMemoizedFn((level: "success" | "error", title: string, detail: string) => {
     void message.open({ type: level, content: `${title}：${detail}` });
-  }
+  });
 
-  function mergeRequestLog(log: RequestLog) {
-    setSnapshot((current) => {
-      if (!current) return current;
-      const logs = [log, ...current.logs.filter((item) => item.id !== log.id)].slice(0, 500);
-      return { ...current, logs };
-    });
-  }
+  const apply = useMemoizedFn(
+    async (action: Promise<DesktopSnapshot>, label: string, notifySuccess = true) => {
+      setError("");
+      recordDiagnostic("info", label, "操作已开始");
+      try {
+        setSnapshot(await action);
+        recordDiagnostic("success", label, "操作成功");
+        if (notifySuccess) notify("success", label, "操作成功");
+      } catch (reason) {
+        showError(reason);
+        recordDiagnostic("error", label, errorMessage(reason));
+        notify("error", label, errorMessage(reason));
+        throw reason;
+      }
+    },
+  );
 
-  async function apply(action: Promise<DesktopSnapshot>, label: string, notifySuccess = true) {
-    setError("");
-    recordDiagnostic("info", label, "操作已开始");
-    try {
-      setSnapshot(await action);
-      recordDiagnostic("success", label, "操作成功");
-      if (notifySuccess) notify("success", label, "操作成功");
-    } catch (reason) {
-      showError(reason);
-      recordDiagnostic("error", label, errorMessage(reason));
-      notify("error", label, errorMessage(reason));
-      throw reason;
-    }
-  }
+  const applyProxyTransition = useMemoizedFn(
+    async (action: Promise<DesktopSnapshot>, label: string, notifySuccess = true) => {
+      setProxyTransition(true);
+      try {
+        await apply(action, label, notifySuccess);
+      } finally {
+        setProxyTransition(false);
+      }
+    },
+  );
 
-  async function applyProxyTransition(
-    action: Promise<DesktopSnapshot>,
-    label: string,
-    notifySuccess = true,
-  ) {
-    setProxyTransition(true);
-    try {
-      await apply(action, label, notifySuccess);
-    } finally {
-      setProxyTransition(false);
-    }
-  }
-
-  async function validateApifox(request: ApifoxRequest) {
+  const validateApifox = useMemoizedFn(async (request: ApifoxRequest) => {
     setError("");
     recordDiagnostic("info", "Apifox 连接/接口解析", "请求已开始");
     try {
@@ -181,9 +177,9 @@ function App() {
       notify("error", "Apifox 连接失败", errorMessage(reason));
       throw reason;
     }
-  }
+  });
 
-  async function execute(action: Promise<unknown>, label: string) {
+  const execute = useMemoizedFn(async (action: Promise<unknown>, label: string) => {
     setError("");
     recordDiagnostic("info", label, "操作已开始");
     try {
@@ -196,10 +192,10 @@ function App() {
       notify("error", label, errorMessage(reason));
       throw reason;
     }
-  }
+  });
 
   if (!snapshot)
-    return <InitializationState busy={initializing} error={error} onRetry={loadSnapshot} />;
+    return <InitializationState busy={initializing} error={error} onRetry={retryLoadSnapshot} />;
 
   return (
     <main className="app-shell">
@@ -256,11 +252,7 @@ function App() {
   );
 }
 
-function InitializationState(props: {
-  busy: boolean;
-  error: string;
-  onRetry: () => Promise<void>;
-}) {
+function InitializationState(props: { busy: boolean; error: string; onRetry: () => void }) {
   if (props.busy)
     return (
       <main className="app-loading">
@@ -280,154 +272,6 @@ function InitializationState(props: {
         </Button>
       </section>
     </main>
-  );
-}
-
-interface WorkspaceProps {
-  activeProfile: DesktopSnapshot["profiles"][number] | null;
-  snapshot: DesktopSnapshot;
-  apply: (
-    action: Promise<DesktopSnapshot>,
-    label: string,
-    notifySuccess?: boolean,
-  ) => Promise<void>;
-  applyProxyTransition: (
-    action: Promise<DesktopSnapshot>,
-    label: string,
-    notifySuccess?: boolean,
-  ) => Promise<void>;
-  execute: (action: Promise<unknown>, label: string) => Promise<void>;
-  validateApifox: typeof desktop.validateApifox;
-  projectNavigation: ComponentProps<typeof ProjectSidebar>;
-  proxyTransition: boolean;
-  appVersion: string;
-}
-
-function Workspace(props: WorkspaceProps) {
-  const profile = props.activeProfile;
-  if (!profile)
-    return (
-      <>
-        <ProjectSidebar {...props.projectNavigation} />
-        <EmptyWorkspace />
-      </>
-    );
-  const currentProfile = profile;
-  const { message } = AntApp.useApp();
-  async function debugSingle(ruleId: string) {
-    await props.applyProxyTransition(
-      desktop.setGlobalMockEnabled(currentProfile.id, true),
-      "开启全局 Mock",
-      false,
-    );
-    const currentRule = currentProfile.rules.find((rule) => rule.id === ruleId);
-    if (currentRule && !currentRule.enabled) {
-      await props.apply(
-        desktop.setRuleEnabled(currentProfile.id, ruleId, true),
-        "开启当前接口 Mock",
-        false,
-      );
-    }
-    const otherRules = currentProfile.rules.filter((rule) => rule.id !== ruleId && rule.enabled);
-    for (const rule of otherRules) {
-      await props.apply(
-        desktop.setRuleEnabled(currentProfile.id, rule.id, false),
-        "关闭其他接口 Mock",
-        false,
-      );
-    }
-    void message.success("已关闭其他接口，仅保留当前接口");
-  }
-  return (
-    <>
-      <ProxyHeader
-        appVersion={props.appVersion}
-        globalMockEnabled={profile.globalMockEnabled}
-        profile={profile}
-        status={props.snapshot.proxyStatus}
-      />
-      <ProjectSidebar {...props.projectNavigation} />
-      <div className="workspace-grid">
-        <ConnectionGuide
-          certificate={props.snapshot.certificate}
-          hasTraffic={props.snapshot.logs.length > 0}
-          profile={profile}
-          proxyStatus={props.snapshot.proxyStatus}
-        />
-        <div className="workspace-config-actions">
-          <LocalMockPanel
-            profileId={profile.id}
-            responses={profile.localResponses}
-            onSave={(input) => props.apply(desktop.saveLocalResponse(input), "保存本地 Mock 响应")}
-            onDelete={(id) =>
-              props.apply(desktop.deleteLocalResponse(profile.id, id), "删除本地 Mock 响应")
-            }
-          />
-          <ApifoxSyncPanel
-            profile={profile}
-            onSync={(request) => props.apply(desktop.syncApifox(request), "同步 Apifox 接口")}
-            onValidate={props.validateApifox}
-          />
-          <CertificatePanel
-            certificate={props.snapshot.certificate}
-            onGenerate={() => props.apply(desktop.generateCertificate(), "生成证书")}
-            onOpen={() => props.execute(desktop.openCertificate(), "打开证书")}
-            onRefresh={() => props.apply(desktop.refreshCertificate(), "刷新证书信任")}
-          />
-        </div>
-      </div>
-      <RuleTable
-        disabled={props.proxyTransition}
-        profiles={props.snapshot.profiles}
-        profile={profile}
-        localResponses={profile.localResponses}
-        onDebugSingle={debugSingle}
-        onDelete={(id) => props.apply(desktop.deleteRule(profile.id, id), "删除 Mock 接口")}
-        onDeleteMany={(ids) =>
-          props.apply(desktop.deleteRules(profile.id, ids), "批量删除 Mock 接口")
-        }
-        onMove={(ruleIds, targetProfileId) =>
-          props.apply(desktop.moveRules(profile.id, targetProfileId, ruleIds), "移动 Mock 接口")
-        }
-        onOpenUrl={(url) => props.execute(desktop.openExternalUrl(url), "打开 Apifox 接口")}
-        onResolve={desktop.resolveApifoxOperation}
-        onSave={(input: RuleInput) => props.apply(desktop.saveRule(input), "保存 Mock 接口")}
-        onToggle={(id, enabled) =>
-          props.apply(desktop.setRuleEnabled(profile.id, id, enabled), "切换接口 Mock")
-        }
-        onToggleAll={(enabled) =>
-          props.apply(desktop.setAllRulesEnabled(profile.id, enabled), "批量切换接口 Mock")
-        }
-        onToggleGlobal={(enabled) =>
-          props.applyProxyTransition(
-            desktop.setGlobalMockEnabled(profile.id, enabled),
-            "切换全局 Mock",
-          )
-        }
-      />
-      <RequestLogPanel
-        logs={props.snapshot.logs}
-        profiles={props.snapshot.profiles}
-        onClear={() => props.apply(desktop.clearLogs(), "清空请求记录")}
-        onPreview={desktop.previewMockResponse}
-      />
-    </>
-  );
-}
-
-function EmptyWorkspace() {
-  return (
-    <section className="empty-workspace">
-      <Empty
-        image={<Monitor size={36} />}
-        description={
-          <>
-            <h1>创建第一个联调项目</h1>
-            <p>点击上方“新建项目”按钮，配置小程序真实接口域名和本地代理端口。</p>
-          </>
-        }
-      />
-    </section>
   );
 }
 
@@ -455,11 +299,6 @@ function ErrorBanner({ error, onClose }: { error: string; onClose: () => void })
       type="error"
     />
   );
-}
-
-function errorMessage(reason: unknown) {
-  if (reason instanceof Error) return reason.message;
-  return String(reason);
 }
 
 export default App;

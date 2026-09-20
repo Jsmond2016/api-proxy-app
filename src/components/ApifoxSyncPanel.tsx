@@ -24,17 +24,6 @@ export function ApifoxSyncPanel(props: ApifoxSyncPanelProps) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    setProjectId(props.profile.apifox.projectId);
-    setMockPrefix(props.profile.apifox.mockPrefix);
-    setSelectedTags(props.profile.syncedTags);
-    setAvailableTags([]);
-    setAccessToken(props.profile.apifox.accessToken);
-    setMockToken(props.profile.apifox.mockToken);
-    setValidated(false);
-    setPreview(null);
-  }, [props.profile.id]);
-
-  useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
